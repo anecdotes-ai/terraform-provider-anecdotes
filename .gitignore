@@ -1,0 +1,71 @@
+# Terraform
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+# State files in example directories
+# Use remote state (Terraform Cloud) for production workflows
+*.tfvars
+*.tfvars.json
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+
+# Provider binary
+terraform-provider-anecdotes
+
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+go.work
+go.work.sum
+
+# IDE
+.idea/
+.vscode/
+.cursor/mcp.json
+
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment files (may contain secrets)
+.env
+.env.*
+*.env
+
+# Test directories with state
+test-live/.terraform/
+test-live/*.tfstate
+test-live/*.tfstate.*
+test-live/.terraform.lock.hcl
+
+# Build artifacts
+dist/
+bin/
+
+# Coverage
+coverage.out
+coverage.html
+
+# Temporary build/test artifacts
+probe_roles.go
+tmp-export/
+terraform-provider-anecdotes_v*
+
+# Claude Code local config (never publish)
+.claude/
