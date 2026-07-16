@@ -1,0 +1,59 @@
+name: Bug report
+description: Report a problem with the Anecdotes Terraform provider
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug. Please remove any secrets
+        (API keys, authorization headers, tenant identifiers) from the details
+        below before submitting.
+  - type: input
+    id: terraform_version
+    attributes:
+      label: Terraform version
+      placeholder: "1.9.0"
+    validations:
+      required: true
+  - type: input
+    id: provider_version
+    attributes:
+      label: Provider version
+      placeholder: "1.0.0"
+    validations:
+      required: true
+  - type: input
+    id: resource
+    attributes:
+      label: Affected resource or data source
+      placeholder: anecdotes_framework
+  - type: textarea
+    id: config
+    attributes:
+      label: Terraform configuration
+      description: A minimal configuration that reproduces the issue. Remove any secrets.
+      render: hcl
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+  - type: textarea
+    id: logs
+    attributes:
+      label: Debug output
+      description: Relevant logs with credentials and authorization headers removed.
+      render: shell
