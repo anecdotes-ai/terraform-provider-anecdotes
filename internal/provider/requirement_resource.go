@@ -263,7 +263,7 @@ func (r *RequirementResource) Update(ctx context.Context, req resource.UpdateReq
 		if resp.Diagnostics.HasError() {
 			return
 		}
-		updateReq.RequirementOwners = owners
+		updateReq.RequirementOwners = &owners
 	}
 
 	// Call API

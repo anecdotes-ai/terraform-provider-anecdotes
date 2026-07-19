@@ -216,12 +216,12 @@ func (r *FrameworkResource) Create(ctx context.Context, req resource.CreateReque
 		FrameworkName:                     data.Name.ValueString(),
 		FrameworkDescription:              data.Description.ValueString(),
 		FolderID:                          data.FolderID.ValueString(),
-		FrameworkAuditable:                data.FrameworkAuditable.ValueBool(),
-		CanAuditorDownloadEvidence:        data.CanAuditorDownloadEvidence.ValueBool(),
-		CanAuditorViewControlAttachments:  data.CanAuditorViewControlAttachments.ValueBool(),
-		CanAuditorViewControlCustomFields: data.CanAuditorViewControlCustomFields.ValueBool(),
-		CanAuditorViewSoaReport:           data.CanAuditorViewSoaReport.ValueBool(),
-		CanAuditorViewTags:                data.CanAuditorViewTags.ValueBool(),
+		FrameworkAuditable:                optionalBoolPtr(data.FrameworkAuditable),
+		CanAuditorDownloadEvidence:        optionalBoolPtr(data.CanAuditorDownloadEvidence),
+		CanAuditorViewControlAttachments:  optionalBoolPtr(data.CanAuditorViewControlAttachments),
+		CanAuditorViewControlCustomFields: optionalBoolPtr(data.CanAuditorViewControlCustomFields),
+		CanAuditorViewSoaReport:           optionalBoolPtr(data.CanAuditorViewSoaReport),
+		CanAuditorViewTags:                optionalBoolPtr(data.CanAuditorViewTags),
 	}
 
 	// Handle auditor control status (set membership → bool object)

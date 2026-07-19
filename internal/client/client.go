@@ -1127,7 +1127,7 @@ func (c *AnecdotesClient) LinkEvidenceToRequirement(requirementID, evidenceID st
 	// Append and update (write field is RequirementRelatedEvidences)
 	updatedEvidences := append(req.RequirementEvidenceIDs, evidenceID)
 	updateReq := &RequirementUpdateRequest{
-		RequirementRelatedEvidences: updatedEvidences,
+		RequirementRelatedEvidences: &updatedEvidences,
 	}
 
 	_, err = c.UpdateRequirement(requirementID, updateReq)
@@ -1141,8 +1141,10 @@ func (c *AnecdotesClient) UnlinkEvidenceFromRequirement(requirementID, evidenceI
 		return fmt.Errorf("failed to read requirement %s: %w", requirementID, err)
 	}
 
-	// Filter out the evidence ID
-	var updatedEvidences []string
+	// Filter out the evidence ID. The slice starts non-nil so removing the
+	// LAST evidence still serializes as an empty list instead of being
+	// dropped by omitempty (which would silently leave the link in place).
+	updatedEvidences := make([]string, 0, len(req.RequirementEvidenceIDs))
 	for _, eid := range req.RequirementEvidenceIDs {
 		if eid != evidenceID {
 			updatedEvidences = append(updatedEvidences, eid)
@@ -1155,7 +1157,7 @@ func (c *AnecdotesClient) UnlinkEvidenceFromRequirement(requirementID, evidenceI
 	}
 
 	updateReq := &RequirementUpdateRequest{
-		RequirementRelatedEvidences: updatedEvidences,
+		RequirementRelatedEvidences: &updatedEvidences,
 	}
 
 	_, err = c.UpdateRequirement(requirementID, updateReq)

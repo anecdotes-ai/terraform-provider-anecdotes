@@ -287,12 +287,14 @@ type FrameworkCreateRequest struct {
 	FolderID             string `json:"folder_id,omitempty"`
 
 	// Auditor configuration
-	FrameworkAuditable                bool                            `json:"framework_auditable,omitempty"`
-	CanAuditorDownloadEvidence        bool                            `json:"can_auditor_download_evidence,omitempty"`
-	CanAuditorViewControlAttachments  bool                            `json:"can_auditor_view_control_attachments,omitempty"`
-	CanAuditorViewControlCustomFields bool                            `json:"can_auditor_view_control_custom_fields,omitempty"`
-	CanAuditorViewSoaReport           bool                            `json:"can_auditor_view_soa_report,omitempty"`
-	CanAuditorViewTags                bool                            `json:"can_auditor_view_tags,omitempty"`
+	// Pointers so an explicit false is serialized rather than dropped by
+	// omitempty (the server would otherwise apply its own default).
+	FrameworkAuditable                *bool                           `json:"framework_auditable,omitempty"`
+	CanAuditorDownloadEvidence        *bool                           `json:"can_auditor_download_evidence,omitempty"`
+	CanAuditorViewControlAttachments  *bool                           `json:"can_auditor_view_control_attachments,omitempty"`
+	CanAuditorViewControlCustomFields *bool                           `json:"can_auditor_view_control_custom_fields,omitempty"`
+	CanAuditorViewSoaReport           *bool                           `json:"can_auditor_view_soa_report,omitempty"`
+	CanAuditorViewTags                *bool                           `json:"can_auditor_view_tags,omitempty"`
 	FrameworkAuditorControlStatus     *FrameworkAuditorControlStatus  `json:"framework_auditor_control_status,omitempty"`
 	FrameworkAuditorEvidenceStatus    *FrameworkAuditorEvidenceStatus `json:"framework_auditor_evidence_status,omitempty"`
 
@@ -399,13 +401,15 @@ type RequirementCreateRequest struct {
 // RequirementUpdateRequest represents the request body for updating a requirement.
 // NOTE: The API expects this wrapped in {"requirement": {...}} — see UpdateRequirement in client.go.
 type RequirementUpdateRequest struct {
-	RequirementDescription       string                 `json:"requirement_description,omitempty"`
-	RequirementHelp              string                 `json:"requirement_help,omitempty"`
-	RequirementCategory          string                 `json:"requirement_category,omitempty"`
-	RequirementOwners            []string               `json:"requirement_owners,omitempty"`
+	RequirementDescription string `json:"requirement_description,omitempty"`
+	RequirementHelp        string `json:"requirement_help,omitempty"`
+	RequirementCategory    string `json:"requirement_category,omitempty"`
+	// Pointer distinguishes "leave unchanged" (nil) from "replace with this
+	// list" (&slice) — an empty replacement list must still be serialized.
+	RequirementOwners            *[]string              `json:"requirement_owners,omitempty"`
 	RequirementRelatedControls   []string               `json:"requirement_related_controls,omitempty"`
 	RequirementRelatedFrameworks []string               `json:"requirement_related_frameworks,omitempty"`
-	RequirementRelatedEvidences  []string               `json:"requirement_related_evidences,omitempty"`
+	RequirementRelatedEvidences  *[]string              `json:"requirement_related_evidences,omitempty"`
 	EvidenceIDs                  []string               `json:"evidence_ids,omitempty"`
 	RequirementScopingOverrides  map[string]interface{} `json:"requirement_scoping_overrides,omitempty"`
 }
