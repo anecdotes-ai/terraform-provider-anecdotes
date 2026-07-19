@@ -7,21 +7,6 @@ compliance program as Infrastructure as Code.
 
 ---
 
-## Table of Contents
-
-- [Quick Start](#quick-start)
-- [Resource Model](#resource-model)
-- [Resources](#resources)
-- [Data Sources](#data-sources)
-- [Examples](#examples)
-- [Development](#development)
-- [Repository Structure](#repository-structure)
-- [Contributing](#contributing)
-- [License](#license)
-- [Support](#support)
-
----
-
 ## Quick Start
 
 ### 1. Configure the provider

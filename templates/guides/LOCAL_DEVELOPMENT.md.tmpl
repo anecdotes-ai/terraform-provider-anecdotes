@@ -4,78 +4,42 @@ page_title: "Local Development - Anecdotes Provider Guide"
 
 # Local Development Guide
 
-This guide explains how to build the Anecdotes Terraform Provider locally and test it against a live Anecdotes account.
+How to build the provider from source and run it against a live Anecdotes account.
 
 ## Prerequisites
 
-- **Go 1.25+** - [Install Go](https://golang.org/doc/install)
-- **Terraform 1.0+** - [Install Terraform](https://www.terraform.io/downloads)
-- **Make** - Usually pre-installed on macOS/Linux
-- **Anecdotes API Key** - Admin role required
+- **Go 1.25+** — [install Go](https://golang.org/doc/install)
+- **Terraform 1.0+** — [install Terraform](https://www.terraform.io/downloads)
+- **Make** — pre-installed on macOS/Linux
+- **Anecdotes API key** — Admin role required
 
-## Quick Start
+## Build and install
 
 ```bash
-# 1. Clone the repository
 git clone https://github.com/anecdotes-ai/terraform-provider-anecdotes.git
 cd terraform-provider-anecdotes
-
-# 2. Build and install locally
-make install
-
-# 3. Set your API key
-export ANECDOTES_API_KEY="your-api-key-here"
-
-# 4. Test with Terraform
-cd examples/provider
-terraform init
-terraform plan
-```
-
----
-
-## Step-by-Step Instructions
-
-### 1. Build the Provider
-
-```bash
-# Build the binary
-make build
-
-# Or build directly with Go
-go build -o terraform-provider-anecdotes .
-```
-
-This creates a `terraform-provider-anecdotes` binary in the current directory.
-
-### 2. Install for Local Terraform Use
-
-The `make install` command installs the provider to your local Terraform plugin directory:
-
-```bash
 make install
 ```
 
-This installs to:
+`make install` builds the binary and places it in your local Terraform plugin
+directory:
+
 ```
-~/.terraform.d/plugins/registry.terraform.io/anecdotes-ai/anecdotes/0.1.0/darwin_arm64/
+~/.terraform.d/plugins/registry.terraform.io/anecdotes-ai/anecdotes/<version>/<os_arch>/
 ```
 
-> **Note**: The path varies by OS and architecture:
-> - macOS ARM: `darwin_arm64`
-> - macOS Intel: `darwin_amd64`
-> - Linux: `linux_amd64`
+`<os_arch>` is your platform, for example `darwin_arm64` or `linux_amd64`.
 
-### 3. Configure Terraform to Use Local Provider
+## Point Terraform at the local build
 
-Create a `~/.terraformrc` file (or `%APPDATA%\terraform.rc` on Windows). Use **filesystem_mirror** so Terraform does not query the registry (the provider is not published there).
-
-**Important:** Terraform does *not* expand `$HOME` in `.terraformrc`. Use your **actual home path** (e.g. run `echo $HOME` and paste it):
+Create `~/.terraformrc` (`%APPDATA%\terraform.rc` on Windows) with a
+`filesystem_mirror`, so Terraform loads the local build instead of querying the
+registry. Terraform does **not** expand `$HOME` here — paste your real home path:
 
 ```hcl
 provider_installation {
   filesystem_mirror {
-    path    = "/Users/YOUR_USERNAME/.terraform.d/plugins"   # replace with your $HOME path
+    path    = "/Users/YOUR_USERNAME/.terraform.d/plugins"
     include = ["registry.terraform.io/anecdotes-ai/anecdotes"]
   }
   direct {
@@ -84,248 +48,66 @@ provider_installation {
 }
 ```
 
-Then run `make install` from the repo root so the provider binary is placed under that path. You can then run `terraform init` and `terraform plan`/`apply` as usual.
+## Authenticate
 
-### 4. Set Up Authentication
-
-Get your API key from the Anecdotes platform:
-
-1. Log into Anecdotes as an Admin
-2. Go to **Administration → API Tokens**
-3. Create a new token with **Admin** role
-4. Copy the token
-
-Set the environment variable:
+Create an API token in the Anecdotes platform (**Administration → API Tokens**,
+Admin role) and export it:
 
 ```bash
 export ANECDOTES_API_KEY="your-api-key-here"
 ```
 
-Or create a `.env` file (don't commit this!):
+## Try it
 
 ```bash
-echo 'ANECDOTES_API_KEY="your-api-key-here"' > .env
-source .env
-```
-
----
-
-## Testing with Live Account
-
-### Create a Test Configuration
-
-Create a new directory for testing:
-
-```bash
-mkdir -p ~/terraform-anecdotes-test
-cd ~/terraform-anecdotes-test
-```
-
-Create `main.tf`:
-
-```hcl
-terraform {
-  required_providers {
-    anecdotes = {
-      source = "anecdotes-ai/anecdotes"
-    }
-  }
-}
-
-provider "anecdotes" {
-  # Uses ANECDOTES_API_KEY environment variable
-}
-
-# Test: Read an existing framework
-data "anecdotes_framework" "test" {
-  framework_id = "1234567890"  # SOC 2 framework ID
-}
-
-output "framework_name" {
-  value = data.anecdotes_framework.test.name
-}
-
-output "framework_status" {
-  value = data.anecdotes_framework.test.framework_status
-}
-
-output "is_auditable" {
-  value = data.anecdotes_framework.test.framework_auditable
-}
-```
-
-### Run Terraform Commands
-
-```bash
-# Skip init when using dev_overrides
-# terraform init  # Not needed!
-
-# Preview changes
+cd examples/provider
+terraform init
 terraform plan
-
-# Apply changes
-terraform apply
-
-# View outputs
-terraform output
-
-# Clean up
-terraform destroy
 ```
 
----
+The `examples/` directory contains a runnable configuration for every resource
+and data source.
 
-## Testing Resource Creation
+## Iterate
 
-### Test Creating a Framework
-
-```hcl
-resource "anecdotes_framework" "test" {
-  name        = "Terraform Test Framework"
-  description = "Created by Terraform provider testing"
-
-  framework_auditable           = false
-  can_auditor_download_evidence = true
-}
-
-output "created_framework_id" {
-  value = anecdotes_framework.test.framework_id
-}
-```
-
-### Test Creating a Control
-
-```hcl
-# First create a control category
-resource "anecdotes_control_category" "test_category" {
-  framework_id = anecdotes_framework.test.framework_id
-  name         = "Test Category"
-}
-
-# Then create a control referencing the category
-resource "anecdotes_control" "test" {
-  framework_id = anecdotes_framework.test.framework_id
-  category_id  = anecdotes_control_category.test_category.category_id
-
-  name        = "Test Control"
-  description = "Created by Terraform"
-
-  owners = ["your-email@example.com"]
-  tags   = ["terraform", "test"]
-}
-
-output "created_control_id" {
-  value = anecdotes_control.test.control_id
-}
-```
-
----
-
-## Development Workflow
-
-### Make Changes → Rebuild → Test
+After changing provider code, rebuild and re-run — Terraform picks up the new
+binary from the mirror path:
 
 ```bash
-# 1. Edit source code
-vim internal/provider/framework_resource.go
-
-# 2. Rebuild and reinstall
 make install
-
-# 3. Test immediately (no terraform init needed with dev_overrides)
-cd ~/terraform-anecdotes-test
 terraform plan
 ```
 
-### Enable Debug Logging
+For verbose logs:
 
 ```bash
-# Set Terraform log level
-export TF_LOG=DEBUG
-
-# Or just for the provider
-export TF_LOG_PROVIDER=DEBUG
-
-# Run terraform
-terraform plan
+TF_LOG_PROVIDER=DEBUG terraform plan
 ```
 
-### View Provider Logs
-
-```bash
-# Full debug output
-TF_LOG=TRACE terraform apply 2>&1 | tee terraform.log
-
-# Filter for provider-specific logs
-grep -i anecdotes terraform.log
-```
-
----
-
-## Makefile Commands
+## Make targets
 
 | Command | Description |
 |---------|-------------|
 | `make build` | Build the provider binary |
-| `make install` | Build and install to local Terraform plugins |
+| `make install` | Build and install into the local plugin directory |
 | `make test` | Run unit tests |
-| `make testacc` | Run acceptance tests (requires API key) |
+| `make testacc` | Run acceptance tests (requires a live account) |
+| `make fmt` | Format Go code and examples |
+| `make lint` | Run the linter |
+| `make docs` | Regenerate documentation |
 | `make clean` | Remove build artifacts |
-| `make fmt` | Format Go code |
-| `make lint` | Run linter |
-
----
 
 ## Troubleshooting
 
-### "Provider not found" Error
-
-Make sure your `~/.terraformrc` has the correct path:
-
-```bash
-# Check where make install put the binary
-ls -la ~/.terraform.d/plugins/registry.terraform.io/anecdotes-ai/anecdotes/
-```
-
-### "API key invalid" Error
-
-Verify your API key is set:
-
-```bash
-echo $ANECDOTES_API_KEY
-```
-
-### Changes Not Taking Effect
-
-After changing the provider code, rebuild and reinstall:
-
-```bash
-make install
-terraform init -upgrade   # optional, to refresh
-terraform plan
-```
-
-### Clean Slate
-
-```bash
-# Remove local state
-rm -rf .terraform terraform.tfstate*
-
-# Rebuild provider
-make clean
-make install
-```
-
----
+- **Provider not found** — confirm the binary exists under
+  `~/.terraform.d/plugins/registry.terraform.io/anecdotes-ai/anecdotes/` and that
+  `~/.terraformrc` uses your real home path.
+- **Authentication failed** — confirm `echo $ANECDOTES_API_KEY` prints your key
+  and that the token has the Admin role.
+- **Changes not taking effect** — re-run `make install`, then `terraform plan`.
 
 ## Cleanup
 
-When done testing with the local provider, you can remove or comment out the `filesystem_mirror` block in `~/.terraformrc` so Terraform uses the default registry again (if you publish the provider later).
-
-And destroy any test resources:
-
-```bash
-cd ~/terraform-anecdotes-test
-terraform destroy
-```
-
+Destroy any test resources with `terraform destroy`, and remove the
+`filesystem_mirror` block from `~/.terraformrc` when you want Terraform to use
+the published provider again.

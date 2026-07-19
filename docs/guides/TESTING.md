@@ -20,8 +20,10 @@ page_title: "Testing - Anecdotes Provider Guide"
 
 ```bash
 export ANECDOTES_API_KEY="your-api-key"
-export TF_ACC=1
 ```
+
+Set `TF_ACC=1` only when running acceptance tests, as shown below — unit tests
+must run without it.
 
 ### Running Tests
 

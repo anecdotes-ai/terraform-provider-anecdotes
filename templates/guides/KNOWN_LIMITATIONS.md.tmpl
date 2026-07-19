@@ -34,12 +34,12 @@ the `anecdotes_control` or `anecdotes_controls` data sources.
 
 ## Create recovery after ambiguous server errors
 
-Creating a framework or requirement can occasionally return a server error
-(HTTP 500) even though the object WAS created. In that case the provider
-recovers its own creation by looking the object up by name. If an unrelated
-object with the same name already existed at that moment, the lookup can match
-it instead — use distinctive names for Terraform-managed frameworks and
-requirements to avoid ambiguity.
+Creating a framework, control category, or requirement can occasionally return
+a server error (HTTP 500) even though the object WAS created. In that case the
+provider recovers its own creation by looking the object up by name. If an
+unrelated object with the same name already existed at that moment, the lookup
+can match it instead — use distinctive names for Terraform-managed objects to
+avoid ambiguity.
 
 ## Authentication happens at provider configuration
 
@@ -57,17 +57,11 @@ time.
 
 ## Enumerated values
 
-Enumerated fields are validated at plan time against the set the provider supports.
-That set reflects the values the API accepts for the operation, which may be a
-deliberate subset of the platform's full enumeration (for example, only the
-schedule frequencies an endpoint fully supports are exposed). Values outside the
-supported set are rejected at plan time.
-
-Closed value sets (statuses, types, modes) are verified against the owning
-backend service and enforced at plan time. Fields whose value sets are
-tenant-defined or discovered at runtime (such as requirement statuses and
-categories) are intentionally not validated at plan time — the server remains
-the authority for those.
+Fields with a closed value set (such as `maturity_level` and the auditor
+visibility statuses) are validated at plan time; values outside the set are
+rejected before any API call. Fields whose values are tenant-defined or
+discovered at runtime (such as requirement categories) are deliberately not
+validated at plan time — the server remains the authority for those.
 
 ## Server errors on malformed input
 
