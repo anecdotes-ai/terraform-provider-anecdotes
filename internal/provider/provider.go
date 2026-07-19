@@ -81,6 +81,10 @@ Generate an API token from the Anecdotes platform:
 
 The API key is exchanged for a JWT Bearer token (valid for 60 minutes, auto-refreshed).
 
+> **Note:** The exchange happens when the provider is configured, so ` + "`terraform plan`" + `
+> and ` + "`terraform apply`" + ` require network access to the Anecdotes API and valid
+> credentials even when no changes are planned. ` + "`terraform validate`" + ` works offline.
+
 Example usage is generated from ` + "`examples/provider/provider.tf`" + `.
 `,
 		Attributes: map[string]schema.Attribute{

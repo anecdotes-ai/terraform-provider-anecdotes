@@ -64,7 +64,9 @@ func (c *AnecdotesClient) refreshToken() error {
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("API key exchange failed with status %d: %s", resp.StatusCode, string(body))
+		// Route through the shared redaction so gateway HTML pages and server
+		// internals never reach diagnostics, same as every other error path.
+		return parseAPIError("GET", "/identity/v1/apikey/exchange", resp.StatusCode, body)
 	}
 
 	// The response is the JWT token as plain text

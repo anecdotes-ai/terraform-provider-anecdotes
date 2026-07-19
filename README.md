@@ -56,6 +56,9 @@ export ANECDOTES_API_KEY="your-api-key-here"
 > - The `api_key` attribute is marked `Sensitive`, so it is redacted from plan/apply output — but it is still stored in state, so treat your state backend as sensitive.
 > - **Never commit API keys, tokens, or `*.tfvars` files** containing secrets. This repository's `.gitignore` excludes `.env`, `*.env`, and `*.tfvars`.
 > - Each user supplies **their own** API key; keys are not bundled with the provider.
+> - The provider authenticates when it is configured, so `terraform plan` and
+>   `terraform apply` need network access and valid credentials even for no-op
+>   plans. `terraform validate` works offline.
 
 The API base URL defaults to `https://api.anecdotes.ai` and can be overridden with
 the `api_url` attribute or the `ANECDOTES_API_URL` environment variable.
