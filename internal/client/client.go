@@ -411,58 +411,52 @@ func (c *AnecdotesClient) ListControlCategories() ([]ControlCategory, error) {
 	return categories, nil
 }
 
-// CreateControlCategory creates a new control category
+// CreateControlCategory creates a new control category.
+// NOTE: The API may return HTTP 500 even though the category WAS created.
+// Only in that ambiguous case, recover our own creation by name within the
+// same framework. An explicit "already exists" conflict is NOT recovered:
+// the category predates this create (use `terraform import` instead).
 func (c *AnecdotesClient) CreateControlCategory(category *ControlCategoryCreateRequest) (*ControlCategory, error) {
-	// Retry on 500 errors — the POST endpoint can return 500 intermittently.
-	var lastErr error
-	for attempt := 0; attempt < 3; attempt++ {
-		respBody, err := c.doRequest("POST", "/api/v1/framework/category", category)
-		if err != nil {
-			errMsg := err.Error()
-			// If the category already exists, fall back to finding by name
-			if strings.Contains(errMsg, "already exists") || IsServerError(err) {
-				existing, lErr := c.getControlCategoryByName(category.CategoryName, category.FrameworkID)
-				if lErr == nil && existing != nil {
-					return existing, nil
-				}
-				// If lookup failed and it was a 500, retry
-				if IsServerError(err) {
-					lastErr = err
-					time.Sleep(2 * time.Second)
-					continue
-				}
+	respBody, err := c.doRequest("POST", "/api/v1/framework/category", category)
+	if err != nil {
+		if IsServerError(err) {
+			existing, lErr := c.getControlCategoryByName(category.CategoryName, category.FrameworkID)
+			if lErr == nil && existing != nil {
+				return existing, nil
 			}
-			return nil, err
 		}
-
-		// Response might be the category ID as string or the full object
-		var categoryID string
-		if err := json.Unmarshal(respBody, &categoryID); err == nil && categoryID != "" {
-			// Return with the ID we got
-			return &ControlCategory{
-				CategoryID:   categoryID,
-				CategoryName: category.CategoryName,
-				FrameworkID:  category.FrameworkID,
-			}, nil
-		}
-
-		// Try parsing as full category object
-		var result ControlCategory
-		if err := json.Unmarshal(respBody, &result); err != nil {
-			return nil, fmt.Errorf("failed to parse create category response: %w", err)
-		}
-
-		return &result, nil
+		return nil, err
 	}
-	return nil, fmt.Errorf("failed to create control category after 3 retries: %w", lastErr)
+
+	// Response might be the category ID as string or the full object
+	var categoryID string
+	if err := json.Unmarshal(respBody, &categoryID); err == nil && categoryID != "" {
+		// Return with the ID we got
+		return &ControlCategory{
+			CategoryID:   categoryID,
+			CategoryName: category.CategoryName,
+			FrameworkID:  category.FrameworkID,
+		}, nil
+	}
+
+	// Try parsing as full category object
+	var result ControlCategory
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, fmt.Errorf("failed to parse create category response: %w", err)
+	}
+
+	return &result, nil
 }
 
-// getControlCategoryByName finds a control category by name within a specific framework
-// (used as fallback when create returns "already exists" or 500).
+// getControlCategoryByName finds a control category by name within a specific
+// framework (used to recover our own creation after an ambiguous 5xx).
+// The match is scoped to the requested framework on purpose: matching a
+// same-named category from another framework would adopt an object this
+// create did not produce.
 func (c *AnecdotesClient) getControlCategoryByName(name, frameworkID string) (*ControlCategory, error) {
 	categories, err := c.ListControlCategories()
 	if err != nil {
-		return nil, fmt.Errorf("control category create failed and list fallback also failed: %w", err)
+		return nil, fmt.Errorf("category lookup by name failed: %w", err)
 	}
 	nameLower := strings.ToLower(strings.TrimSpace(name))
 	for _, cat := range categories {
@@ -470,13 +464,7 @@ func (c *AnecdotesClient) getControlCategoryByName(name, frameworkID string) (*C
 			return &cat, nil
 		}
 	}
-	// Try matching by name only (framework may have been recreated with new ID)
-	for _, cat := range categories {
-		if strings.ToLower(strings.TrimSpace(cat.CategoryName)) == nameLower {
-			return &cat, nil
-		}
-	}
-	return nil, fmt.Errorf("control category create failed and category %q not found in framework %s (%d total)", name, frameworkID, len(categories))
+	return nil, fmt.Errorf("category %q not found in framework %s (%d total): %w", name, frameworkID, len(categories), ErrNotFound)
 }
 
 // UpdateControlCategory updates an existing control category
