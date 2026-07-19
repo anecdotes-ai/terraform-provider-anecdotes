@@ -121,3 +121,21 @@ func TestGetRequirementEvidenceLink_ServerErrorIsNotNotFound(t *testing.T) {
 		t.Errorf("a 500 must not satisfy IsNotFound (would drop state on a transient failure): %v", err)
 	}
 }
+
+func TestGetRequirementEvidenceLink_ParentMissingIsNotFound(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/apikey/exchange"):
+			_, _ = w.Write([]byte("test-token"))
+		default: // requirement does not exist — empty result set
+			_, _ = w.Write([]byte(`[]`))
+		}
+	}))
+	defer srv.Close()
+
+	c := newTestClient(t, srv)
+	err := c.GetRequirementEvidenceLink("r_gone", "ev1")
+	if !IsNotFound(err) {
+		t.Errorf("missing parent requirement should satisfy IsNotFound, got: %v", err)
+	}
+}

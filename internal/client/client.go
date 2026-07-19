@@ -642,7 +642,11 @@ func (c *AnecdotesClient) GetRequirement(requirementID string) (*Requirement, er
 
 	// API may return an array even for single ID
 	var results []Requirement
-	if err := json.Unmarshal(respBody, &results); err == nil && len(results) > 0 {
+	if err := json.Unmarshal(respBody, &results); err == nil {
+		// An empty array means the requirement does not exist (mirrors GetControl).
+		if len(results) == 0 {
+			return nil, fmt.Errorf("requirement not found: %s: %w", requirementID, ErrNotFound)
+		}
 		c.resolveRequirementStatusNames([]*Requirement{&results[0]})
 		return &results[0], nil
 	}
