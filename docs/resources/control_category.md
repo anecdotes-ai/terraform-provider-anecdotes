@@ -44,3 +44,14 @@ resource "anecdotes_control" "access_review" {
 ### Read-Only
 
 - `category_id` (String) The unique identifier of the control category.
+
+## Import
+
+Import is supported using the following syntax:
+
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
+```shell
+# Import a control category by its category_id.
+terraform import anecdotes_control_category.example category_67890
+```

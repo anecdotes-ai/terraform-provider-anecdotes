@@ -86,3 +86,14 @@ resource "anecdotes_framework" "custom_security" {
 ### Read-Only
 
 - `framework_id` (String) The unique identifier of the framework in Anecdotes (e.g., `1234567890`).
+
+## Import
+
+Import is supported using the following syntax:
+
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
+```shell
+# Import a framework by its framework_id.
+terraform import anecdotes_framework.example framework_14421
+```

@@ -92,3 +92,14 @@ resource "anecdotes_mapping_control_requirement" "iso_link" {
 ### Read-Only
 
 - `requirement_id` (String) The unique identifier of the requirement in Anecdotes (e.g., `requirement_9012`).
+
+## Import
+
+Import is supported using the following syntax:
+
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
+```shell
+# Import a requirement by its requirement_id.
+terraform import anecdotes_requirement.example requirement_12345
+```

@@ -76,3 +76,14 @@ resource "anecdotes_control" "access_reviews" {
 
 - `category_name` (String) The name of the control category (computed from category_id).
 - `control_id` (String) The unique identifier of the control in Anecdotes (e.g., `control_55312`).
+
+## Import
+
+Import is supported using the following syntax:
+
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
+```shell
+# Import a control by framework_id/control_id.
+terraform import anecdotes_control.example framework_14421/control_55312
+```

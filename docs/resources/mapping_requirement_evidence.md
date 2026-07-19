@@ -48,3 +48,14 @@ resource "anecdotes_mapping_requirement_evidence" "link_s3_acl" {
 
 - `evidence_id` (String) The unique identifier of the evidence item to link.
 - `requirement_id` (String) The unique identifier of the requirement.
+
+## Import
+
+Import is supported using the following syntax:
+
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
+```shell
+# Import a requirement-evidence mapping by requirement_id/evidence_id.
+terraform import anecdotes_mapping_requirement_evidence.example requirement_12345/evidence_54321
+```

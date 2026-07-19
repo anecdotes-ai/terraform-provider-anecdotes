@@ -29,3 +29,14 @@ resource "anecdotes_framework_folder" "security" {
 ### Read-Only
 
 - `folder_id` (String) The unique identifier for the folder (UUID format).
+
+## Import
+
+Import is supported using the following syntax:
+
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
+```shell
+# Import a framework folder by its folder_id.
+terraform import anecdotes_framework_folder.example folder_98765
+```

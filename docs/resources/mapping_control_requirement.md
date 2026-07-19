@@ -37,3 +37,14 @@ resource "anecdotes_mapping_control_requirement" "mfa_link" {
 ### Read-Only
 
 - `framework_id` (String) The framework ID associated with the control-requirement link (computed).
+
+## Import
+
+Import is supported using the following syntax:
+
+The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
+
+```shell
+# Import a control-requirement mapping by control_id/requirement_id.
+terraform import anecdotes_mapping_control_requirement.example control_55312/requirement_12345
+```
