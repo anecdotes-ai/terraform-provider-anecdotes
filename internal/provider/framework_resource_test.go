@@ -50,14 +50,14 @@ resource "anecdotes_framework" "test" {
 			{
 				Config: fmt.Sprintf(`
 resource "anecdotes_framework" "test" {
-  name                = %q
-  description         = "Updated description"
-  framework_auditable = true
+  name                  = %q
+  description           = "Updated description"
+  can_auditor_view_tags = true
 }`, name2),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("anecdotes_framework.test", "name", name2),
 					resource.TestCheckResourceAttr("anecdotes_framework.test", "description", "Updated description"),
-					resource.TestCheckResourceAttr("anecdotes_framework.test", "framework_auditable", "true"),
+					resource.TestCheckResourceAttr("anecdotes_framework.test", "can_auditor_view_tags", "true"),
 				),
 			},
 		},
