@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"strings"
 
 	"github.com/anecdotes-ai/terraform-provider-anecdotes/internal/client"
 	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
@@ -392,26 +393,18 @@ func (r *ControlResource) ImportState(ctx context.Context, req resource.ImportSt
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("control_id"), idParts[1])...)
 }
 
-// splitImportID splits an import ID by "/" and returns the parts
+// splitImportID splits an import ID by "/" and returns exactly expectedParts
+// non-empty parts, or nil for a malformed ID. Empty segments are rejected so
+// typos like "a//b" or a trailing slash fail loudly instead of importing.
 func splitImportID(id string, expectedParts int) []string {
-	parts := make([]string, 0, expectedParts)
-	current := ""
-	for _, c := range id {
-		if c == '/' {
-			if current != "" {
-				parts = append(parts, current)
-				current = ""
-			}
-		} else {
-			current += string(c)
-		}
-	}
-	if current != "" {
-		parts = append(parts, current)
-	}
-
+	parts := strings.Split(id, "/")
 	if len(parts) != expectedParts {
 		return nil
+	}
+	for _, p := range parts {
+		if p == "" {
+			return nil
+		}
 	}
 	return parts
 }
