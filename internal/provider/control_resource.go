@@ -74,18 +74,9 @@ Framework (anecdotes_framework)
             └── Requirements linked via (anecdotes_mapping_control_requirement)
 ` + "```" + `
 
-## Control Status Values
-
-| Status | Description |
-|--------|-------------|
-| ` + "`Not applicable`" + ` | Control does not apply to this organization |
-| ` + "`Not started`" + ` | Control implementation has not begun (default) |
-| ` + "`In progress`" + ` | Control is being implemented |
-| ` + "`Gap`" + ` | Control has an identified compliance gap |
-| ` + "`Monitoring`" + ` | Control is being actively monitored |
-| ` + "`Ready for audit`" + ` | Control is ready for auditor review |
-| ` + "`Issue by auditor`" + ` | Auditor has identified an issue |
-| ` + "`Approved by auditor`" + ` | Auditor has approved the control |
+> **Note:** Control status is not managed by this resource — it is computed by the
+> platform. Inspect it with the ` + "`anecdotes_control`" + ` or ` + "`anecdotes_controls`" + `
+> data sources.
 `,
 
 		Attributes: map[string]schema.Attribute{

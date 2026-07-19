@@ -12,8 +12,9 @@ lists the known cases so you can anticipate them.
 ## Validation performed only by the server
 
 The provider validates required fields, types, and enumerated values (for example
-control status and maturity level) at plan time. The following constraints depend
-on live platform state and are therefore enforced only at apply:
+control maturity level and auditor visibility statuses) at plan time. The
+following constraints depend on live platform state and are therefore enforced
+only at apply:
 
 - **Cross-entity references** — IDs such as `framework_id`, `evidence_id`,
   `control_id`, and owner email addresses are checked for existence and permission
@@ -21,8 +22,31 @@ on live platform state and are therefore enforced only at apply:
 - **Control deletion** — only custom controls can be deleted; deleting a
   non-custom control is rejected by the API.
 - **Uniqueness / duplicates** — name uniqueness (frameworks, categories, and
-  similar) is enforced by the API. The provider recovers from "already exists"
-  where possible but cannot detect duplicates at plan time.
+  similar) is enforced by the API and cannot be detected at plan time. Creating
+  an entity whose name already exists fails at apply; bring the existing entity
+  under management with `terraform import` instead.
+
+## Control status is read-only
+
+The `anecdotes_control` resource does not manage control status — status is
+computed by the platform from evidence and monitoring signals. Inspect it with
+the `anecdotes_control` or `anecdotes_controls` data sources.
+
+## Create recovery after ambiguous server errors
+
+Creating a framework or requirement can occasionally return a server error
+(HTTP 500) even though the object WAS created. In that case the provider
+recovers its own creation by looking the object up by name. If an unrelated
+object with the same name already existed at that moment, the lookup can match
+it instead — use distinctive names for Terraform-managed frameworks and
+requirements to avoid ambiguity.
+
+## Authentication happens at provider configuration
+
+The provider exchanges the API key for a session token when it is configured,
+so `terraform plan` and `terraform apply` require network access to the
+Anecdotes API and valid credentials — even for plans that change nothing.
+`terraform validate` works offline.
 
 ## Feature-gated operations
 
