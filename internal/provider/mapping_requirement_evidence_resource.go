@@ -6,7 +6,6 @@ package provider
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/anecdotes-ai/terraform-provider-anecdotes/internal/client"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -161,11 +160,12 @@ func (r *MappingRequirementEvidenceResource) Delete(ctx context.Context, req res
 }
 
 func (r *MappingRequirementEvidenceResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	parts := strings.SplitN(req.ID, ":", 2)
-	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+	// Import format: requirement_id/evidence_id
+	parts := splitImportID(req.ID, 2)
+	if parts == nil {
 		resp.Diagnostics.AddError(
 			"Invalid Import ID",
-			fmt.Sprintf("Expected import ID in the format 'requirement_id:evidence_id', got: %s", req.ID),
+			fmt.Sprintf("Expected import ID in the format 'requirement_id/evidence_id', got: %s", req.ID),
 		)
 		return
 	}
