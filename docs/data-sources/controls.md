@@ -4,11 +4,16 @@ page_title: "anecdotes_controls Data Source - anecdotes"
 subcategory: ""
 description: |-
   Lists all controls for a given framework, with optional filtering by category, name, or status.
+  **Note:** To read controls created in the same configuration, add `depends_on`
+  to this data source so Terraform reads it only after those controls exist.
 ---
 
 # anecdotes_controls (Data Source)
 
 Lists all controls for a given framework, with optional filtering by category, name, or status.
+
+> **Note:** To read controls created in the same configuration, add `depends_on`
+> to this data source so Terraform reads it only after those controls exist.
 
 ## Example Usage
 

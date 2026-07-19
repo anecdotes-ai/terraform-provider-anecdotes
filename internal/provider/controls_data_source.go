@@ -57,6 +57,9 @@ func (d *ControlsDataSource) Schema(ctx context.Context, req datasource.SchemaRe
 		Description: "Lists all controls for a given framework, with optional filtering.",
 		MarkdownDescription: `
 Lists all controls for a given framework, with optional filtering by category, name, or status.
+
+> **Note:** To read controls created in the same configuration, add ` + "`depends_on`" + `
+> to this data source so Terraform reads it only after those controls exist.
 `,
 		Attributes: map[string]schema.Attribute{
 			"framework_id": schema.StringAttribute{

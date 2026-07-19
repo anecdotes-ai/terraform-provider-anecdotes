@@ -4,11 +4,18 @@ page_title: "anecdotes_requirements Data Source - anecdotes"
 subcategory: ""
 description: |-
   Lists all requirements in the Anecdotes Requirements Hub, with optional filtering.
+  **Note:** To read requirements created in the same configuration, add
+  `depends_on` to this data source so Terraform reads it only after those
+  requirements exist.
 ---
 
 # anecdotes_requirements (Data Source)
 
 Lists all requirements in the Anecdotes Requirements Hub, with optional filtering.
+
+> **Note:** To read requirements created in the same configuration, add
+> `depends_on` to this data source so Terraform reads it only after those
+> requirements exist.
 
 ## Example Usage
 

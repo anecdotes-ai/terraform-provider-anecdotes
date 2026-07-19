@@ -54,6 +54,10 @@ func (d *RequirementsDataSource) Schema(ctx context.Context, req datasource.Sche
 		Description: "Lists all requirements in the Requirements Hub, with optional filtering.",
 		MarkdownDescription: `
 Lists all requirements in the Anecdotes Requirements Hub, with optional filtering.
+
+> **Note:** To read requirements created in the same configuration, add
+> ` + "`depends_on`" + ` to this data source so Terraform reads it only after those
+> requirements exist.
 `,
 		Attributes: map[string]schema.Attribute{
 			"name_contains": schema.StringAttribute{

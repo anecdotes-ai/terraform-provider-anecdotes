@@ -32,6 +32,15 @@ The `anecdotes_control` resource does not manage control status — status is
 computed by the platform from evidence and monitoring signals. Inspect it with
 the `anecdotes_control` or `anecdotes_controls` data sources.
 
+## Framework folder is not returned on read
+
+The framework API does not return `folder_id`, so a framework's folder placement
+cannot be recovered on `terraform import`. After importing a framework that lives
+in a folder, set `folder_id` in your configuration to match; otherwise the next
+plan will show a change (and, because folder placement is immutable, a
+replacement). Frameworks created and managed entirely by Terraform are
+unaffected — the configured `folder_id` is preserved in state.
+
 ## Create recovery after ambiguous server errors
 
 Creating a framework, control category, or requirement can occasionally return
