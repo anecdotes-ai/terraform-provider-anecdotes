@@ -116,10 +116,8 @@ Framework (this resource)
 
 			// ==================== Auditor Configuration ====================
 			"framework_auditable": schema.BoolAttribute{
-				Description: "Whether auditors can access this framework. When true, auditors with access can view the framework.",
-				Optional:    true,
+				Description: "Whether the framework is auditable. Managed by the platform's audit lifecycle and cannot be set through this provider; read-only.",
 				Computed:    true,
-				Default:     booldefault.StaticBool(false),
 			},
 
 			"can_auditor_download_evidence": schema.BoolAttribute{
@@ -211,40 +209,33 @@ func (r *FrameworkResource) Create(ctx context.Context, req resource.CreateReque
 		return
 	}
 
-	// Build create request
-	createReq := &client.FrameworkCreateRequest{
-		FrameworkName:                     data.Name.ValueString(),
-		FrameworkDescription:              data.Description.ValueString(),
-		FolderID:                          data.FolderID.ValueString(),
-		FrameworkAuditable:                optionalBoolPtr(data.FrameworkAuditable),
-		CanAuditorDownloadEvidence:        optionalBoolPtr(data.CanAuditorDownloadEvidence),
-		CanAuditorViewControlAttachments:  optionalBoolPtr(data.CanAuditorViewControlAttachments),
-		CanAuditorViewControlCustomFields: optionalBoolPtr(data.CanAuditorViewControlCustomFields),
-		CanAuditorViewSoaReport:           optionalBoolPtr(data.CanAuditorViewSoaReport),
-		CanAuditorViewTags:                optionalBoolPtr(data.CanAuditorViewTags),
-	}
-
-	// Handle auditor control status (set membership → bool object)
-	if !data.AuditorVisibleControlStatuses.IsNull() && !data.AuditorVisibleControlStatuses.IsUnknown() {
-		createReq.FrameworkAuditorControlStatus = auditorControlStatusFromSet(ctx, data.AuditorVisibleControlStatuses, &resp.Diagnostics)
-	}
-
-	// Handle auditor evidence status (set membership → bool object)
-	if !data.AuditorVisibleEvidenceStatuses.IsNull() && !data.AuditorVisibleEvidenceStatuses.IsUnknown() {
-		createReq.FrameworkAuditorEvidenceStatus = auditorEvidenceStatusFromSet(ctx, data.AuditorVisibleEvidenceStatuses, &resp.Diagnostics)
-	}
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	// Call API to create framework
-	framework, err := r.client.CreateFramework(createReq)
+	// Create ignores auditor configuration; it is applied afterward.
+	framework, err := r.client.CreateFramework(&client.FrameworkCreateRequest{
+		FrameworkName:        data.Name.ValueString(),
+		FrameworkDescription: data.Description.ValueString(),
+		FolderID:             data.FolderID.ValueString(),
+	})
 	if err != nil {
 		addClientError(&resp.Diagnostics, "create framework", err)
 		return
 	}
 
-	// Set computed values from response
+	r.configureFrameworkAuditing(ctx, framework.FrameworkID, &data, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		// The framework exists — persist state so the next apply does not duplicate it.
+		var d diag.Diagnostics
+		r.setFrameworkState(ctx, &data, framework, &d)
+		resp.Diagnostics.Append(d...)
+		resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+		return
+	}
+
+	framework, err = r.client.GetFramework(framework.FrameworkID)
+	if err != nil {
+		addClientError(&resp.Diagnostics, "read framework after create", err)
+		return
+	}
+
 	var diags diag.Diagnostics
 	r.setFrameworkState(ctx, &data, framework, &diags)
 	resp.Diagnostics.Append(diags...)
@@ -293,38 +284,17 @@ func (r *FrameworkResource) Update(ctx context.Context, req resource.UpdateReque
 		return
 	}
 
-	// Build update request
-	updateReq := &client.FrameworkUpdateRequest{
-		FrameworkName:                     data.Name.ValueString(),
-		FrameworkDescription:              data.Description.ValueString(),
-		FrameworkAuditable:                optionalBoolPtr(data.FrameworkAuditable),
-		CanAuditorDownloadEvidence:        optionalBoolPtr(data.CanAuditorDownloadEvidence),
-		CanAuditorViewControlAttachments:  optionalBoolPtr(data.CanAuditorViewControlAttachments),
-		CanAuditorViewControlCustomFields: optionalBoolPtr(data.CanAuditorViewControlCustomFields),
-		CanAuditorViewSoaReport:           optionalBoolPtr(data.CanAuditorViewSoaReport),
-		CanAuditorViewTags:                optionalBoolPtr(data.CanAuditorViewTags),
-	}
-
-	// Handle auditor control status (set membership → bool object)
-	if !data.AuditorVisibleControlStatuses.IsNull() && !data.AuditorVisibleControlStatuses.IsUnknown() {
-		updateReq.FrameworkAuditorControlStatus = auditorControlStatusFromSet(ctx, data.AuditorVisibleControlStatuses, &resp.Diagnostics)
-	}
-
-	// Handle auditor evidence status (set membership → bool object)
-	if !data.AuditorVisibleEvidenceStatuses.IsNull() && !data.AuditorVisibleEvidenceStatuses.IsUnknown() {
-		updateReq.FrameworkAuditorEvidenceStatus = auditorEvidenceStatusFromSet(ctx, data.AuditorVisibleEvidenceStatuses, &resp.Diagnostics)
-	}
+	r.configureFrameworkAuditing(ctx, data.FrameworkID.ValueString(), &data, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	framework, err := r.client.UpdateFramework(data.FrameworkID.ValueString(), updateReq)
+	framework, err := r.client.GetFramework(data.FrameworkID.ValueString())
 	if err != nil {
-		addClientError(&resp.Diagnostics, "update framework", err)
+		addClientError(&resp.Diagnostics, "read framework after update", err)
 		return
 	}
 
-	// Update state with response
 	var diags diag.Diagnostics
 	r.setFrameworkState(ctx, &data, framework, &diags)
 	resp.Diagnostics.Append(diags...)
@@ -333,6 +303,47 @@ func (r *FrameworkResource) Update(ctx context.Context, req resource.UpdateReque
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+}
+
+// configureFrameworkAuditing applies the base fields and auditor booleans via
+// PATCH and the auditor visibility status sets via their dedicated endpoints —
+// the configuration the create endpoint does not accept. Shared by Create and Update.
+func (r *FrameworkResource) configureFrameworkAuditing(ctx context.Context, frameworkID string, data *FrameworkResourceModel, diags *diag.Diagnostics) {
+	patchReq := &client.FrameworkUpdateRequest{
+		FrameworkName:                     data.Name.ValueString(),
+		FrameworkDescription:              data.Description.ValueString(),
+		CanAuditorDownloadEvidence:        optionalBoolPtr(data.CanAuditorDownloadEvidence),
+		CanAuditorViewControlAttachments:  optionalBoolPtr(data.CanAuditorViewControlAttachments),
+		CanAuditorViewControlCustomFields: optionalBoolPtr(data.CanAuditorViewControlCustomFields),
+		CanAuditorViewSoaReport:           optionalBoolPtr(data.CanAuditorViewSoaReport),
+		CanAuditorViewTags:                optionalBoolPtr(data.CanAuditorViewTags),
+	}
+	if _, err := r.client.UpdateFramework(frameworkID, patchReq); err != nil {
+		addClientError(diags, "configure framework", err)
+		return
+	}
+
+	if !data.AuditorVisibleControlStatuses.IsNull() && !data.AuditorVisibleControlStatuses.IsUnknown() {
+		status := auditorControlStatusFromSet(ctx, data.AuditorVisibleControlStatuses, diags)
+		if diags.HasError() {
+			return
+		}
+		if err := r.client.SetFrameworkAuditorControlStatus(frameworkID, status); err != nil {
+			addClientError(diags, "set framework auditor control statuses", err)
+			return
+		}
+	}
+
+	if !data.AuditorVisibleEvidenceStatuses.IsNull() && !data.AuditorVisibleEvidenceStatuses.IsUnknown() {
+		status := auditorEvidenceStatusFromSet(ctx, data.AuditorVisibleEvidenceStatuses, diags)
+		if diags.HasError() {
+			return
+		}
+		if err := r.client.SetFrameworkAuditorEvidenceStatus(frameworkID, status); err != nil {
+			addClientError(diags, "set framework auditor evidence statuses", err)
+			return
+		}
+	}
 }
 
 func (r *FrameworkResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
@@ -370,13 +381,8 @@ func (r *FrameworkResource) setFrameworkState(ctx context.Context, data *Framewo
 		data.FolderID = types.StringNull()
 	}
 
-	// Auditor configuration - preserve user's configured value if they set it
-	// The API may return different defaults
-	if !data.FrameworkAuditable.IsNull() && !data.FrameworkAuditable.IsUnknown() {
-		// Keep the user's configured value
-	} else {
-		data.FrameworkAuditable = types.BoolValue(framework.FrameworkAuditable)
-	}
+	// framework_auditable is platform-managed (read-only) — always from the API.
+	data.FrameworkAuditable = types.BoolValue(framework.FrameworkAuditable)
 	data.CanAuditorDownloadEvidence = types.BoolValue(framework.CanAuditorDownloadEvidence)
 	data.CanAuditorViewControlAttachments = types.BoolValue(framework.CanAuditorViewControlAttachments)
 	data.CanAuditorViewControlCustomFields = types.BoolValue(framework.CanAuditorViewControlCustomFields)

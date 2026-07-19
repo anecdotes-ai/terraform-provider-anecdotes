@@ -3,8 +3,7 @@ resource "anecdotes_framework" "custom_security" {
   name        = "Custom Security Framework"
   description = "Internal security controls for our organization"
 
-  # Enable auditor access
-  framework_auditable           = true
+  # Auditor access settings
   can_auditor_download_evidence = true
   can_auditor_view_soa_report   = true
 

@@ -377,6 +377,19 @@ func (c *AnecdotesClient) getFrameworkByName(name string) (*Framework, error) {
 	return nil, fmt.Errorf("framework %q not found in list: %w", name, ErrNotFound)
 }
 
+// SetFrameworkAuditorControlStatus sets the auditor-visible control statuses via
+// the dedicated endpoint (the framework create/update body rejects this field).
+func (c *AnecdotesClient) SetFrameworkAuditorControlStatus(frameworkID string, status *FrameworkAuditorControlStatus) error {
+	_, err := c.doRequest("PUT", "/api/v1/framework/"+frameworkID+"/auditor_control_status", status)
+	return err
+}
+
+// SetFrameworkAuditorEvidenceStatus sets the auditor-visible evidence statuses.
+func (c *AnecdotesClient) SetFrameworkAuditorEvidenceStatus(frameworkID string, status *FrameworkAuditorEvidenceStatus) error {
+	_, err := c.doRequest("PUT", "/api/v1/framework/"+frameworkID+"/auditor_evidence_status", status)
+	return err
+}
+
 // UpdateFramework updates an existing framework
 func (c *AnecdotesClient) UpdateFramework(frameworkID string, framework *FrameworkUpdateRequest) (*Framework, error) {
 	respBody, err := c.doRequest("PATCH", "/api/v1/framework/"+frameworkID, framework)

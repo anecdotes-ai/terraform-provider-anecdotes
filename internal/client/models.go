@@ -280,65 +280,27 @@ type ControlRequirementLink struct {
 	FrameworkID   string `json:"framework_id"`
 }
 
-// FrameworkCreateRequest represents the request body for creating a framework
+// FrameworkCreateRequest is the create-framework body. The create endpoint
+// ignores auditor configuration; it is applied afterward via UpdateFramework and
+// SetFrameworkAuditorControlStatus / SetFrameworkAuditorEvidenceStatus.
 type FrameworkCreateRequest struct {
 	FrameworkName        string `json:"framework_name"`
 	FrameworkDescription string `json:"framework_description,omitempty"`
 	FolderID             string `json:"folder_id,omitempty"`
-
-	// Auditor configuration
-	// Pointers so an explicit false is serialized rather than dropped by
-	// omitempty (the server would otherwise apply its own default).
-	FrameworkAuditable                *bool                           `json:"framework_auditable,omitempty"`
-	CanAuditorDownloadEvidence        *bool                           `json:"can_auditor_download_evidence,omitempty"`
-	CanAuditorViewControlAttachments  *bool                           `json:"can_auditor_view_control_attachments,omitempty"`
-	CanAuditorViewControlCustomFields *bool                           `json:"can_auditor_view_control_custom_fields,omitempty"`
-	CanAuditorViewSoaReport           *bool                           `json:"can_auditor_view_soa_report,omitempty"`
-	CanAuditorViewTags                *bool                           `json:"can_auditor_view_tags,omitempty"`
-	FrameworkAuditorControlStatus     *FrameworkAuditorControlStatus  `json:"framework_auditor_control_status,omitempty"`
-	FrameworkAuditorEvidenceStatus    *FrameworkAuditorEvidenceStatus `json:"framework_auditor_evidence_status,omitempty"`
-
-	// References
-	FrameworkReferenceFieldName string   `json:"framework_reference_field_name,omitempty"`
-	FrameworkReferences         []string `json:"framework_references,omitempty"`
-
-	// Customization
-	FrameworkIconID string `json:"framework_icon_id,omitempty"`
-
-	// Plugin scoping
-	FrameworkExcludedPlugins map[string]interface{} `json:"framework_excluded_plugins,omitempty"`
 }
 
 // FrameworkUpdateRequest represents the request body for updating a framework
 type FrameworkUpdateRequest struct {
 	FrameworkName        string `json:"framework_name,omitempty"`
 	FrameworkDescription string `json:"framework_description,omitempty"`
-	FrameworkStatus      string `json:"framework_status,omitempty"`
 
-	// Auditor configuration
-	FrameworkAuditable                *bool                           `json:"framework_auditable,omitempty"`
-	CanAuditorDownloadEvidence        *bool                           `json:"can_auditor_download_evidence,omitempty"`
-	CanAuditorViewControlAttachments  *bool                           `json:"can_auditor_view_control_attachments,omitempty"`
-	CanAuditorViewControlCustomFields *bool                           `json:"can_auditor_view_control_custom_fields,omitempty"`
-	CanAuditorViewSoaReport           *bool                           `json:"can_auditor_view_soa_report,omitempty"`
-	CanAuditorViewTags                *bool                           `json:"can_auditor_view_tags,omitempty"`
-	FrameworkAuditorControlStatus     *FrameworkAuditorControlStatus  `json:"framework_auditor_control_status,omitempty"`
-	FrameworkAuditorEvidenceStatus    *FrameworkAuditorEvidenceStatus `json:"framework_auditor_evidence_status,omitempty"`
-
-	// References
-	FrameworkReferenceFieldName string   `json:"framework_reference_field_name,omitempty"`
-	FrameworkReferences         []string `json:"framework_references,omitempty"`
-
-	// Customization
-	FrameworkIconID string `json:"framework_icon_id,omitempty"`
-
-	// Plugin scoping
-	FrameworkExcludedPlugins map[string]interface{} `json:"framework_excluded_plugins,omitempty"`
-
-	// Additional fields accepted by the API
-	AuditStartDateStr string `json:"audit_start_date,omitempty"`
-	AuditEndDateStr   string `json:"audit_end_date,omitempty"`
-	FolderID          string `json:"folder_id,omitempty"`
+	// The visibility status sets use dedicated endpoints, not this body.
+	// framework_auditable is platform-managed and cannot be set here.
+	CanAuditorDownloadEvidence        *bool `json:"can_auditor_download_evidence,omitempty"`
+	CanAuditorViewControlAttachments  *bool `json:"can_auditor_view_control_attachments,omitempty"`
+	CanAuditorViewControlCustomFields *bool `json:"can_auditor_view_control_custom_fields,omitempty"`
+	CanAuditorViewSoaReport           *bool `json:"can_auditor_view_soa_report,omitempty"`
+	CanAuditorViewTags                *bool `json:"can_auditor_view_tags,omitempty"`
 }
 
 // ControlCategory represents a control category within a framework

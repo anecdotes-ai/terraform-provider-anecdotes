@@ -38,8 +38,7 @@ resource "anecdotes_framework" "custom_security" {
   name        = "Custom Security Framework"
   description = "Internal security controls for our organization"
 
-  # Enable auditor access
-  framework_auditable           = true
+  # Auditor access settings
   can_auditor_download_evidence = true
   can_auditor_view_soa_report   = true
 
@@ -81,10 +80,10 @@ resource "anecdotes_framework" "custom_security" {
 - `can_auditor_view_tags` (Boolean) Whether auditors can view tags on controls in this framework.
 - `description` (String) A detailed description of the framework and its purpose.
 - `folder_id` (String) The ID of the folder where this framework will be placed. Optional for import.
-- `framework_auditable` (Boolean) Whether auditors can access this framework. When true, auditors with access can view the framework.
 
 ### Read-Only
 
+- `framework_auditable` (Boolean) Whether the framework is auditable. Managed by the platform's audit lifecycle and cannot be set through this provider; read-only.
 - `framework_id` (String) The unique identifier of the framework in Anecdotes (e.g., `1234567890`).
 
 ## Import
