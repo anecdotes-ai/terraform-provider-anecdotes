@@ -318,12 +318,12 @@ func (c *AnecdotesClient) GetFramework(frameworkID string) (*Framework, error) {
 func (c *AnecdotesClient) CreateFramework(framework *FrameworkCreateRequest) (*Framework, error) {
 	respBody, err := c.doRequest("POST", "/api/v1/framework", framework)
 	if err != nil {
-		// The API sometimes returns 500 but still creates the framework.
-		// It also returns 400 "already exists" if a framework with the same name
-		// exists (for example, if a previous create attempt partially succeeded).
-		// In both cases, fall back to finding by name.
-		errMsg := err.Error()
-		if IsServerError(err) || strings.Contains(errMsg, "already exists") {
+		// The API sometimes returns 500 even though the framework WAS created.
+		// Only in that ambiguous case, recover our own creation by name. An
+		// explicit "already exists" conflict is NOT recovered: the framework
+		// predates this create, and adopting it would take ownership of an
+		// object Terraform did not create (use `terraform import` instead).
+		if IsServerError(err) {
 			return c.getFrameworkByName(framework.FrameworkName)
 		}
 		return nil, err
@@ -681,10 +681,12 @@ func (c *AnecdotesClient) ListRequirements() ([]Requirement, error) {
 func (c *AnecdotesClient) CreateRequirement(requirement *RequirementCreateRequest) (*Requirement, error) {
 	respBody, err := c.doRequest("POST", "/api/v1/requirement", requirement)
 	if err != nil {
-		// If the requirement already exists (for example, if a previous create
-		// attempt partially succeeded), look it up by name.
-		errMsg := err.Error()
-		if strings.Contains(errMsg, "already exists") || IsConflict(err) {
+		// The API can error ambiguously (5xx) even though the requirement WAS
+		// created. Only in that case, recover our own creation by name. An
+		// explicit "already exists" conflict is NOT recovered: the requirement
+		// predates this create, and adopting it would take ownership of an
+		// object Terraform did not create (use `terraform import` instead).
+		if IsServerError(err) {
 			existing, lErr := c.getRequirementByName(requirement.RequirementDescription)
 			if lErr == nil && existing != nil {
 				return existing, nil
