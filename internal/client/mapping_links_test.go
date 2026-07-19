@@ -105,7 +105,8 @@ func TestGetRequirementEvidenceLink_ServerErrorIsNotNotFound(t *testing.T) {
 		case strings.HasSuffix(r.URL.Path, "/apikey/exchange"):
 			_, _ = w.Write([]byte("test-token"))
 		default:
-			w.WriteHeader(http.StatusInternalServerError)
+			// 501: a server error that is never retried, keeping this test instant.
+			w.WriteHeader(http.StatusNotImplemented)
 			_, _ = w.Write([]byte(`{"detail":"upstream unavailable"}`))
 		}
 	}))

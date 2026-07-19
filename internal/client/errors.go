@@ -76,7 +76,7 @@ func (e *APIError) IsUnsupported() bool { return e.Class == ClassUnsupported }
 
 // IsRetryable reports whether retrying the request might succeed. doRequest
 // already exhausts these internally, so a surfaced APIError is effectively final.
-func (e *APIError) IsRetryable() bool { return isRetryable(e.StatusCode) }
+func (e *APIError) IsRetryable() bool { return isRetryable(e.Method, e.StatusCode) }
 
 // classifyStatus maps an HTTP status code to an ErrorClass.
 func classifyStatus(status int) ErrorClass {

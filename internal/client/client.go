@@ -103,16 +103,24 @@ func (c *AnecdotesClient) getToken() (string, error) {
 	return c.token, nil
 }
 
-// doRequest performs an authenticated HTTP request.
-// It treats 2xx and 304 (Not Modified) as success.
-// isRetryable returns true for HTTP status codes that warrant a retry.
-func isRetryable(statusCode int) bool {
-	return statusCode == 429 || statusCode == 500 || statusCode == 502 || statusCode == 503
+// isRetryable returns true when a failed request may be safely re-sent.
+// 429 is always retryable: the server rejected the request without executing
+// it. Server errors (500/502/503) are retried only for idempotent methods —
+// re-sending a POST after an ambiguous 5xx could execute the operation twice
+// (the create endpoints are known to occasionally return 500 AFTER creating).
+func isRetryable(method string, statusCode int) bool {
+	if statusCode == 429 {
+		return true
+	}
+	idempotent := method == http.MethodGet || method == http.MethodPut || method == http.MethodDelete || method == http.MethodHead
+	return idempotent && (statusCode == 500 || statusCode == 502 || statusCode == 503)
 }
 
 // maxRetries is the number of retry attempts for retryable errors.
 const maxRetries = 3
 
+// doRequest performs an authenticated HTTP request.
+// It treats 2xx and 304 (Not Modified) as success.
 func (c *AnecdotesClient) doRequest(method, path string, body interface{}) ([]byte, error) {
 	token, err := c.getToken()
 	if err != nil {
@@ -177,7 +185,7 @@ func (c *AnecdotesClient) doRequest(method, path string, body interface{}) ([]by
 
 		lastErr = parseAPIError(method, path, resp.StatusCode, respBody)
 
-		if !isRetryable(resp.StatusCode) || attempt >= maxRetries {
+		if !isRetryable(method, resp.StatusCode) || attempt >= maxRetries {
 			return nil, lastErr
 		}
 
@@ -200,7 +208,7 @@ func (c *AnecdotesClient) doRequest(method, path string, body interface{}) ([]by
 // doFormRequest performs an authenticated HTTP request with multipart/form-data body.
 // The Anecdotes compliance API expects FormData (multipart), NOT application/x-www-form-urlencoded.
 // The data map values are strings sent as form fields.
-// Includes retry with exponential backoff for 429/500/502/503.
+// Includes retry with exponential backoff, subject to isRetryable.
 func (c *AnecdotesClient) doFormRequest(method, path string, data map[string]string) ([]byte, error) {
 	token, err := c.getToken()
 	if err != nil {
@@ -264,7 +272,7 @@ func (c *AnecdotesClient) doFormRequest(method, path string, data map[string]str
 
 		lastErr = parseAPIError(method, path, resp.StatusCode, respBody)
 
-		if !isRetryable(resp.StatusCode) || attempt >= maxRetries {
+		if !isRetryable(method, resp.StatusCode) || attempt >= maxRetries {
 			return nil, lastErr
 		}
 

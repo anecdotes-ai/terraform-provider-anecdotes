@@ -185,14 +185,20 @@ func TestErrorHelpers_ConflictServerStatus(t *testing.T) {
 }
 
 func TestAPIError_Classifiers(t *testing.T) {
-	e := &APIError{StatusCode: 422, Class: ClassValidation}
+	e := &APIError{StatusCode: 422, Method: "POST", Class: ClassValidation}
 	if !e.IsValidation() || e.IsNotFound() || e.IsRetryable() {
 		t.Errorf("validation classifiers wrong: %+v", e)
 	}
-	if !(&APIError{StatusCode: 503, Class: ClassServer}).IsRetryable() {
-		t.Error("503 should be retryable")
+	if !(&APIError{StatusCode: 503, Method: "GET", Class: ClassServer}).IsRetryable() {
+		t.Error("GET 503 should be retryable")
 	}
-	if (&APIError{StatusCode: 404, Class: ClassNotFound}).IsRetryable() {
+	if (&APIError{StatusCode: 500, Method: "POST", Class: ClassServer}).IsRetryable() {
+		t.Error("POST 500 must not be retryable — re-sending could execute the create twice")
+	}
+	if !(&APIError{StatusCode: 429, Method: "POST", Class: ClassUnknown}).IsRetryable() {
+		t.Error("429 should be retryable for any method")
+	}
+	if (&APIError{StatusCode: 404, Method: "GET", Class: ClassNotFound}).IsRetryable() {
 		t.Error("404 should not be retryable")
 	}
 }
