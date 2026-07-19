@@ -338,7 +338,9 @@ func (c *AnecdotesClient) CreateFramework(framework *FrameworkCreateRequest) (*F
 		// predates this create, and adopting it would take ownership of an
 		// object Terraform did not create (use `terraform import` instead).
 		if IsServerError(err) {
-			return c.getFrameworkByName(framework.FrameworkName)
+			if existing, lErr := c.getFrameworkByName(framework.FrameworkName); lErr == nil && existing != nil {
+				return existing, nil
+			}
 		}
 		return nil, err
 	}
@@ -359,18 +361,20 @@ func (c *AnecdotesClient) CreateFramework(framework *FrameworkCreateRequest) (*F
 	return c.GetFramework(frameworkID)
 }
 
-// getFrameworkByName finds a framework by its name (used as fallback when create returns 500).
+// getFrameworkByName finds a framework by its name. Used only to recover our
+// own creation when the create call succeeded ambiguously (a 5xx that still
+// created the framework, or a success response in an unexpected shape).
 func (c *AnecdotesClient) getFrameworkByName(name string) (*Framework, error) {
 	frameworks, err := c.ListFrameworks()
 	if err != nil {
-		return nil, fmt.Errorf("framework create returned 500 and list fallback also failed: %w", err)
+		return nil, fmt.Errorf("framework lookup by name failed: %w", err)
 	}
 	for _, fw := range frameworks {
 		if fw.FrameworkName == name {
 			return &fw, nil
 		}
 	}
-	return nil, fmt.Errorf("framework create returned 500 and framework %q not found in list", name)
+	return nil, fmt.Errorf("framework %q not found in list: %w", name, ErrNotFound)
 }
 
 // UpdateFramework updates an existing framework
@@ -1061,8 +1065,8 @@ func (c *AnecdotesClient) UploadFileToURL(uploadURL string, fileData []byte, con
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("file upload failed with status %d: %s", resp.StatusCode, string(body))
+		// Do not echo the storage backend's response body (raw XML/HTML).
+		return fmt.Errorf("file upload failed with status %d", resp.StatusCode)
 	}
 
 	return nil
