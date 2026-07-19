@@ -896,7 +896,7 @@ func (c *AnecdotesClient) GetControlRequirementLink(controlID, requirementID str
 		}
 	}
 
-	return nil, fmt.Errorf("requirement %s is not linked to control %s", requirementID, controlID)
+	return nil, fmt.Errorf("requirement %s is not linked to control %s: %w", requirementID, controlID, ErrNotFound)
 }
 
 // UpdateControlRequirements updates the requirements linked to a control
@@ -1168,7 +1168,7 @@ func (c *AnecdotesClient) GetRequirementEvidenceLink(requirementID, evidenceID s
 		}
 	}
 
-	return fmt.Errorf("evidence %s is not linked to requirement %s", evidenceID, requirementID)
+	return fmt.Errorf("evidence %s is not linked to requirement %s: %w", evidenceID, requirementID, ErrNotFound)
 }
 
 // GetEvidenceFullData retrieves the full table data for an evidence instance.

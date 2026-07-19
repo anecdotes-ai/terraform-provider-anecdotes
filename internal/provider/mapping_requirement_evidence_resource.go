@@ -122,8 +122,12 @@ func (r *MappingRequirementEvidenceResource) Read(ctx context.Context, req resou
 	evidenceID := data.EvidenceID.ValueString()
 
 	if err := r.client.GetRequirementEvidenceLink(requirementID, evidenceID); err != nil {
-		// Link no longer exists — remove from state
-		resp.State.RemoveResource(ctx)
+		if client.IsNotFound(err) {
+			// Link no longer exists — remove from state
+			resp.State.RemoveResource(ctx)
+			return
+		}
+		addClientError(&resp.Diagnostics, "read requirement-evidence mapping", err)
 		return
 	}
 

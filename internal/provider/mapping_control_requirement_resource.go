@@ -134,7 +134,11 @@ func (r *MappingControlRequirementResource) Read(ctx context.Context, req resour
 
 	link, err := r.client.GetControlRequirementLink(controlID, requirementID)
 	if err != nil {
-		resp.State.RemoveResource(ctx)
+		if client.IsNotFound(err) {
+			resp.State.RemoveResource(ctx)
+			return
+		}
+		addClientError(&resp.Diagnostics, "read control-requirement mapping", err)
 		return
 	}
 
