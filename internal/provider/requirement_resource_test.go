@@ -76,9 +76,11 @@ resource "anecdotes_requirement" "test" {
 }`, name),
 			},
 			{
-				ResourceName:      "anecdotes_requirement.test",
-				ImportState:       true,
-				ImportStateVerify: true,
+				ResourceName:                         "anecdotes_requirement.test",
+				ImportState:                          true,
+				ImportStateVerify:                    true,
+				ImportStateVerifyIdentifierAttribute: "requirement_id",
+				ImportStateIdFunc:                    importIDFromAttr("anecdotes_requirement.test", "requirement_id"),
 			},
 		},
 	})

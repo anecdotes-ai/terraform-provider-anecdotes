@@ -56,9 +56,11 @@ func TestAccFrameworkFolderResource_import(t *testing.T) {
 				Config: fmt.Sprintf(`resource "anecdotes_framework_folder" "test" { name = %q }`, name),
 			},
 			{
-				ResourceName:      "anecdotes_framework_folder.test",
-				ImportState:       true,
-				ImportStateVerify: true,
+				ResourceName:                         "anecdotes_framework_folder.test",
+				ImportState:                          true,
+				ImportStateVerify:                    true,
+				ImportStateVerifyIdentifierAttribute: "folder_id",
+				ImportStateIdFunc:                    importIDFromAttr("anecdotes_framework_folder.test", "folder_id"),
 			},
 		},
 	})

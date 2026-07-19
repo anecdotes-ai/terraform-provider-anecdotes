@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
-	"github.com/hashicorp/terraform-plugin-testing/terraform"
 )
 
 func TestAccControlResource_create(t *testing.T) {
@@ -74,16 +73,11 @@ func TestAccControlResource_import(t *testing.T) {
 				Config: testAccControlConfig(fwName, catName, ctrlName),
 			},
 			{
-				ResourceName: "anecdotes_control.test",
-				ImportState:  true,
-				ImportStateIdFunc: func(s *terraform.State) (string, error) {
-					rs, ok := s.RootModule().Resources["anecdotes_control.test"]
-					if !ok {
-						return "", fmt.Errorf("resource not found: anecdotes_control.test")
-					}
-					return rs.Primary.Attributes["framework_id"] + "/" + rs.Primary.Attributes["control_id"], nil
-				},
-				ImportStateVerify: true,
+				ResourceName:                         "anecdotes_control.test",
+				ImportState:                          true,
+				ImportStateVerify:                    true,
+				ImportStateVerifyIdentifierAttribute: "control_id",
+				ImportStateIdFunc:                    importIDComposite("anecdotes_control.test", "framework_id", "control_id"),
 			},
 		},
 	})

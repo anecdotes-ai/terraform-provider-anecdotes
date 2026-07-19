@@ -4,11 +4,9 @@
 package provider
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
-	"github.com/hashicorp/terraform-plugin-testing/terraform"
 )
 
 func TestAccMappingControlRequirementResource_create(t *testing.T) {
@@ -52,18 +50,11 @@ resource "anecdotes_mapping_control_requirement" "test" {
 }`,
 			},
 			{
-				ResourceName: "anecdotes_mapping_control_requirement.test",
-				ImportState:  true,
-				// The resource has no id attribute; build the documented
-				// composite import ID from state.
-				ImportStateIdFunc: func(s *terraform.State) (string, error) {
-					rs, ok := s.RootModule().Resources["anecdotes_mapping_control_requirement.test"]
-					if !ok {
-						return "", fmt.Errorf("resource not found in state")
-					}
-					return rs.Primary.Attributes["control_id"] + "/" + rs.Primary.Attributes["requirement_id"], nil
-				},
-				ImportStateVerify: true,
+				ResourceName:                         "anecdotes_mapping_control_requirement.test",
+				ImportState:                          true,
+				ImportStateVerify:                    true,
+				ImportStateVerifyIdentifierAttribute: "control_id",
+				ImportStateIdFunc:                    importIDComposite("anecdotes_mapping_control_requirement.test", "control_id", "requirement_id"),
 			},
 		},
 	})

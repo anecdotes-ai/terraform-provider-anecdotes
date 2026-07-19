@@ -4,19 +4,28 @@
 package provider
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
+// TestAccControlsDataSource_basic creates a control and confirms the plural data
+// source lists it for its framework.
 func TestAccControlsDataSource_basic(t *testing.T) {
-	// Use a known framework with controls (the chained approach may pick a framework with 0 controls)
+	fw := randomName("fw")
+	cat := randomName("cat")
+	ctrl := randomName("ctrl")
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: `data "anecdotes_controls" "test" { framework_id = "1234567890" }`,
+				Config: testAccControlConfig(fw, cat, ctrl) + `
+data "anecdotes_controls" "test" {
+  framework_id = anecdotes_control.test.framework_id
+  depends_on   = [anecdotes_control.test]
+}`,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					testCheckTotalCountGreaterThan("data.anecdotes_controls.test", 0),
 					testCheckListCountMatchesTotalCount("data.anecdotes_controls.test", "controls"),
@@ -28,33 +37,23 @@ func TestAccControlsDataSource_basic(t *testing.T) {
 	})
 }
 
-func TestAccControlsDataSource_withKnownFrameworkID(t *testing.T) {
-	resource.Test(t, resource.TestCase{
-		PreCheck:                 func() { testAccPreCheck(t) },
-		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		Steps: []resource.TestStep{
-			{
-				Config: `data "anecdotes_controls" "test" { framework_id = "1234567890" }`,
-				Check: resource.ComposeAggregateTestCheckFunc(
-					testCheckTotalCountGreaterThan("data.anecdotes_controls.test", 0),
-					testCheckListCountMatchesTotalCount("data.anecdotes_controls.test", "controls"),
-				),
-			},
-		},
-	})
-}
-
+// TestAccControlsDataSource_filterByName confirms the name_contains filter
+// matches the created control.
 func TestAccControlsDataSource_filterByName(t *testing.T) {
+	fw := randomName("fw")
+	cat := randomName("cat")
+	ctrl := randomName("ctrl-filter")
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: `
+				Config: testAccControlConfig(fw, cat, ctrl) + fmt.Sprintf(`
 data "anecdotes_controls" "test" {
-  framework_id  = "1234567890"
-  name_contains = "access"
-}`,
+  framework_id  = anecdotes_control.test.framework_id
+  name_contains = %q
+  depends_on    = [anecdotes_control.test]
+}`, ctrl),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					testCheckTotalCountGreaterThan("data.anecdotes_controls.test", 0),
 					testCheckListCountMatchesTotalCount("data.anecdotes_controls.test", "controls"),

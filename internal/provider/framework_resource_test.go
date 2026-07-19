@@ -78,9 +78,11 @@ resource "anecdotes_framework" "test" {
 }`, name),
 			},
 			{
-				ResourceName:      "anecdotes_framework.test",
-				ImportState:       true,
-				ImportStateVerify: true,
+				ResourceName:                         "anecdotes_framework.test",
+				ImportState:                          true,
+				ImportStateVerify:                    true,
+				ImportStateVerifyIdentifierAttribute: "framework_id",
+				ImportStateIdFunc:                    importIDFromAttr("anecdotes_framework.test", "framework_id"),
 			},
 		},
 	})

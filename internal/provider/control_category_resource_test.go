@@ -64,9 +64,11 @@ func TestAccControlCategoryResource_import(t *testing.T) {
 				Config: testAccControlCategoryConfig(fwName, catName),
 			},
 			{
-				ResourceName:      "anecdotes_control_category.test",
-				ImportState:       true,
-				ImportStateVerify: true,
+				ResourceName:                         "anecdotes_control_category.test",
+				ImportState:                          true,
+				ImportStateVerify:                    true,
+				ImportStateVerifyIdentifierAttribute: "category_id",
+				ImportStateIdFunc:                    importIDFromAttr("anecdotes_control_category.test", "category_id"),
 			},
 		},
 	})

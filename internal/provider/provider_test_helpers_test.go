@@ -20,6 +20,31 @@ var testAccProtoV6ProviderFactories = map[string]func() (tfprotov6.ProviderServe
 	"anecdotes": providerserver.NewProtocol6WithError(New("test")()),
 }
 
+// importIDFromAttr builds an ImportStateIdFunc that reads a single attribute
+// from the named resource's state. These resources expose no synthetic "id",
+// so imports must be driven by the real identifier attribute.
+func importIDFromAttr(resourceName, attr string) resource.ImportStateIdFunc {
+	return func(s *terraform.State) (string, error) {
+		rs, ok := s.RootModule().Resources[resourceName]
+		if !ok {
+			return "", fmt.Errorf("resource %s not found in state", resourceName)
+		}
+		return rs.Primary.Attributes[attr], nil
+	}
+}
+
+// importIDComposite builds an ImportStateIdFunc that joins two attributes with a
+// slash, matching the composite import format of the mapping resources.
+func importIDComposite(resourceName, attr1, attr2 string) resource.ImportStateIdFunc {
+	return func(s *terraform.State) (string, error) {
+		rs, ok := s.RootModule().Resources[resourceName]
+		if !ok {
+			return "", fmt.Errorf("resource %s not found in state", resourceName)
+		}
+		return rs.Primary.Attributes[attr1] + "/" + rs.Primary.Attributes[attr2], nil
+	}
+}
+
 func testAccPreCheck(t *testing.T) {
 	t.Helper()
 	if os.Getenv("ANECDOTES_API_KEY") == "" {
