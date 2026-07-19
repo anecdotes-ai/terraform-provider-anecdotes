@@ -64,9 +64,13 @@ func (c *AnecdotesClient) refreshToken() error {
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		// Route through the shared redaction so gateway HTML pages and server
-		// internals never reach diagnostics, same as every other error path.
-		return parseAPIError("GET", "/identity/v1/apikey/exchange", resp.StatusCode, body)
+		// Redact via the shared parser, but return a PLAIN error on purpose:
+		// authentication failures must not carry API error classification. A
+		// classified 404/5xx from the identity endpoint would otherwise satisfy
+		// IsNotFound/IsServerError in callers — dropping healthy resources from
+		// state or triggering create recovery for a request that was never sent.
+		apiErr := parseAPIError("GET", "/identity/v1/apikey/exchange", resp.StatusCode, body)
+		return fmt.Errorf("API key exchange failed (HTTP %d): %s", resp.StatusCode, apiErr.Message)
 	}
 
 	// The response is the JWT token as plain text

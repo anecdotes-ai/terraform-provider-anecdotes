@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func TestParseAPIError_Shapes(t *testing.T) {
@@ -204,7 +205,7 @@ func TestAPIError_Classifiers(t *testing.T) {
 }
 
 // newTestClient builds a client pointed at a test server, satisfying the initial
-// token exchange. exchangeCount (if non-nil) counts token-exchange hits.
+// token exchange.
 func newTestClient(t *testing.T, srv *httptest.Server) *AnecdotesClient {
 	t.Helper()
 	c, err := NewAnecdotesClient("test-key", srv.URL)
@@ -290,5 +291,46 @@ func TestDoRequest_PersistentNon2xxIsNotInfiniteLoop(t *testing.T) {
 	// 404 is not retryable: exactly one resource call.
 	if got := atomic.LoadInt32(&things); got != 1 {
 		t.Errorf("resource calls = %d, want 1 (404 not retried)", got)
+	}
+}
+
+// A classified error from the identity exchange must never leak API error
+// classification into callers: a 404/500 on a mid-session token refresh would
+// otherwise satisfy IsNotFound/IsServerError and trigger state-drop or create
+// recovery for a request that was never sent.
+func TestTokenRefreshErrors_DoNotClassify(t *testing.T) {
+	for _, status := range []int{404, 500} {
+		var exchangeFails atomic.Bool
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasSuffix(r.URL.Path, "/apikey/exchange") {
+				if exchangeFails.Load() {
+					w.WriteHeader(status)
+					_, _ = w.Write([]byte(`{"detail":"identity error"}`))
+					return
+				}
+				_, _ = w.Write([]byte("test-token"))
+				return
+			}
+			_, _ = w.Write([]byte(`[]`))
+		}))
+
+		c := newTestClient(t, srv)
+		// Expire the token so the next request forces a refresh, then fail it.
+		exchangeFails.Store(true)
+		c.mu.Lock()
+		c.tokenExp = time.Time{}
+		c.mu.Unlock()
+
+		_, err := c.ListFrameworks()
+		if err == nil {
+			t.Fatalf("status %d: expected an error from the failed refresh", status)
+		}
+		if IsNotFound(err) {
+			t.Errorf("status %d: auth failure must not satisfy IsNotFound (would drop state)", status)
+		}
+		if IsServerError(err) {
+			t.Errorf("status %d: auth failure must not satisfy IsServerError (would trigger create recovery)", status)
+		}
+		srv.Close()
 	}
 }
