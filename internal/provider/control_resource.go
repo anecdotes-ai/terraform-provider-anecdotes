@@ -218,22 +218,31 @@ func (r *ControlResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
+	// Set computed values
+	data.ControlID = types.StringValue(control.ControlID)
+	data.CategoryName = types.StringValue(category.CategoryName)
+
 	// Set maturity level if user specified it (separate API call)
 	if !data.MaturityLevel.IsNull() && !data.MaturityLevel.IsUnknown() {
 		if err := r.client.SetControlMaturityLevel(control.ControlID, data.MaturityLevel.ValueString()); err != nil {
+			// The control exists on the platform — persist it in state (as
+			// tainted) before erroring, so the next apply does not create a
+			// duplicate.
+			data.MaturityLevel = types.StringNull()
+			resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 			addClientError(&resp.Diagnostics, "set control maturity level", err)
 			return
 		}
 	}
 
-	// Set computed values
-	data.ControlID = types.StringValue(control.ControlID)
-	data.CategoryName = types.StringValue(category.CategoryName)
-
-	// Populate maturity level from the platform when not explicitly set
+	// Populate maturity level from the platform when not explicitly set. When
+	// the platform has no maturity value (or the lookup fails), record null —
+	// a Computed attribute must not remain unknown after apply.
 	if data.MaturityLevel.IsNull() || data.MaturityLevel.IsUnknown() {
 		if level, err := r.client.GetControlMaturityLevel(control.ControlID); err == nil && level != "" && level != "0" {
 			data.MaturityLevel = types.StringValue(level)
+		} else {
+			data.MaturityLevel = types.StringNull()
 		}
 	}
 

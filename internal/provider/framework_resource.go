@@ -364,6 +364,10 @@ func (r *FrameworkResource) setFrameworkState(ctx context.Context, data *Framewo
 	// Preserve the plan/state value when the API response is empty.
 	if framework.FolderID != "" {
 		data.FolderID = types.StringValue(framework.FolderID)
+	} else if data.FolderID.IsUnknown() {
+		// Create without a configured folder and no API echo: record "no
+		// folder" — a Computed attribute must not remain unknown after apply.
+		data.FolderID = types.StringNull()
 	}
 
 	// Auditor configuration - preserve user's configured value if they set it
