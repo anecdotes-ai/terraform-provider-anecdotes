@@ -1,0 +1,28 @@
+# gitleaks configuration — secret scanning guard for the public repo.
+# Extends the built-in default ruleset; see https://github.com/gitleaks/gitleaks
+#
+# Usage:
+#   gitleaks detect --source .            # scan git history
+#   gitleaks detect --no-git --source .   # scan the working tree
+# GitHub secret scanning (free for public repos) should also be enabled as a
+# going-forward guard.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Allow synthetic placeholders and example values used in tests/docs/examples"
+regexes = [
+  '''ANECDOTES_API_KEY="your-api-key(-here)?"''',
+  '''(user|reviewer)@example\.com''',
+  # Synthetic ID placeholders used across examples/docs/tests. Anchored with \b so
+  # the digits can't act as a substring that suppresses a real secret merely
+  # containing "1234567890" (e.g. sk_live_abc1234567890def stays flagged).
+  # \w+_ matches any entity prefix (url_, policy_, evidence_, …) so the list never
+  # goes stale; the second pattern covers the bare, unprefixed form.
+  '''\b\w+_1234567890\b''',
+  '''\b1234567890\b''',
+]
+paths = [
+  '''(.*?)(go\.sum)$''',
+]

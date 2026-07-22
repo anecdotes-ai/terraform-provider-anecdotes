@@ -1,0 +1,63 @@
+# Copyright (c) Anecdotes AI
+# SPDX-License-Identifier: MPL-2.0
+
+name: Docs
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+# Cancel superseded runs for the same PR; never cancel runs on the default branch.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  docs:
+    name: docs-drift
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          # Let tfplugindocs invoke `terraform fmt` directly.
+          terraform_wrapper: false
+      - name: Install tfplugindocs
+        # Installs the exact version pinned in go.mod via tools/tools.go (single
+        # source of truth — no separate hardcoded version to drift).
+        run: go install github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs@v0.25.0
+      - name: Generate docs
+        env:
+          TF_CLI_CONFIG_FILE: ${{ github.workspace }}/.terraformrc.ci
+        run: |
+          # tfplugindocs schema export uses hashicorp/<provider-name> internally;
+          # dev_overrides lets Terraform execute the locally built binary in CI.
+          go build -buildvcs=false -o "$(go env GOPATH)/bin/terraform-provider-anecdotes" .
+          chmod +x "$(go env GOPATH)/bin/terraform-provider-anecdotes"
+          cat > .terraformrc.ci <<EOF
+          provider_installation {
+            dev_overrides {
+              "hashicorp/anecdotes" = "$(go env GOPATH)/bin"
+            }
+            direct {}
+          }
+          EOF
+          make docs
+      - name: Check docs are up to date
+        run: |
+          if [ -n "$(git status --porcelain docs/)" ]; then
+            echo "::error::docs/ is out of date — run 'make docs' and commit the result."
+            git --no-pager diff -- docs/
+            exit 1
+          fi

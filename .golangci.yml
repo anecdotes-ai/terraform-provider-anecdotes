@@ -1,0 +1,8 @@
+# golangci-lint configuration.
+# Pin the linter set explicitly so CI results are reproducible and don't shift
+# when the golangci-lint binary changes its defaults. "standard" = errcheck,
+# govet, ineffassign, staticcheck, unused — the set this repo is clean against.
+version: "2"
+
+linters:
+  default: standard

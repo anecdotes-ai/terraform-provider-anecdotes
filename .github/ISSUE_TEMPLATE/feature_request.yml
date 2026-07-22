@@ -1,0 +1,20 @@
+name: Feature request
+description: Suggest an enhancement to the Anecdotes Terraform provider
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / use case
+      description: What are you trying to accomplish that the provider does not support today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: The resource, data source, or attribute you would like to see.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
