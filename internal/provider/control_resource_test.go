@@ -5,9 +5,11 @@ package provider
 
 import (
 	"fmt"
+	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
 )
 
 func TestAccControlResource_create(t *testing.T) {
@@ -81,4 +83,66 @@ func TestAccControlResource_import(t *testing.T) {
 			},
 		},
 	})
+}
+
+// TestAccControlResource_platformProvidedRejected: a control that belongs to a
+// platform framework cannot be updated or deleted, so importing one must fail
+// rather than put an unmanageable object into state.
+func TestAccControlResource_platformProvidedRejected(t *testing.T) {
+	fwName := randomName("fw-ootb")
+	catName := randomName("cat-ootb")
+	ctrlName := randomName("ctrl-ootb")
+
+	// Resolved in PreCheck so the tenant is only queried once the acceptance
+	// gate has passed.
+	var importID string
+
+	resource.Test(t, resource.TestCase{
+		PreCheck: func() {
+			testAccPreCheck(t)
+			importID = testAccPlatformControlImportID(t)
+		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccControlConfig(fwName, catName, ctrlName),
+			},
+			{
+				Config:            testAccControlConfig(fwName, catName, ctrlName),
+				ResourceName:      "anecdotes_control.test",
+				ImportState:       true,
+				ImportStateIdFunc: func(*terraform.State) (string, error) { return importID, nil },
+				ImportStateVerify: false,
+				ExpectError:       regexp.MustCompile(`(?s)cannot be managed by Terraform`),
+			},
+		},
+	})
+}
+
+// testAccPlatformControlImportID returns the import ID of a control provided by
+// a platform framework, skipping the test when the tenant has none.
+func testAccPlatformControlImportID(t *testing.T) string {
+	t.Helper()
+
+	c := testAccNewClient(t)
+	frameworks, err := c.ListFrameworks()
+	if err != nil {
+		t.Fatalf("listing frameworks: %v", err)
+	}
+	for _, framework := range frameworks {
+		if !framework.IsApplicable {
+			continue
+		}
+		controls, err := c.ListControls(framework.FrameworkID)
+		if err != nil {
+			continue
+		}
+		for _, control := range controls {
+			if control.ControlIsCustom != nil && !*control.ControlIsCustom {
+				return framework.FrameworkID + "/" + control.ControlID
+			}
+		}
+	}
+	t.Skip("no platform-provided control on this tenant")
+	return ""
 }

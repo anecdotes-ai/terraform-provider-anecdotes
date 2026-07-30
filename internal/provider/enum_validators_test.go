@@ -68,6 +68,11 @@ func TestEnumAttributeValidators(t *testing.T) {
 			validators: strAttr(t, mustSchema(NewControlResource()), "maturity_level"),
 			bad:        "banana", good: "DEFINED",
 		},
+		{
+			name:       "requirement.category",
+			validators: strAttr(t, mustSchema(NewRequirementResource()), "category"),
+			bad:        "banana", good: "Custom Requirements",
+		},
 	}
 
 	for _, c := range cases {

@@ -108,10 +108,15 @@ func randomName(prefix string) string {
 
 func testAccFrameworkConfig(name string) string {
 	return fmt.Sprintf(`
+resource "anecdotes_framework_folder" "test" {
+  name = "%s-folder"
+}
+
 resource "anecdotes_framework" "test" {
   name        = %q
   description = "Acceptance test framework"
-}`, name)
+  folder_id   = anecdotes_framework_folder.test.folder_id
+}`, name, name)
 }
 
 func testAccControlCategoryConfig(fwName, catName string) string {
