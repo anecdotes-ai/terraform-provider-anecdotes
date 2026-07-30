@@ -2,8 +2,8 @@
 resource "anecdotes_requirement" "quarterly_access_review" {
   name        = "Perform quarterly user access review"
   description = "Review all user access rights quarterly and remove inappropriate access"
-  category    = "Access Reviews"
-  owner       = "security@example.com"
+  category    = "Access"
+  owners      = ["security@example.com"]
 }
 
 # This requirement can satisfy multiple controls across frameworks

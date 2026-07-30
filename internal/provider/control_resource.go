@@ -10,8 +10,9 @@ import (
 	"strings"
 
 	"github.com/anecdotes-ai/terraform-provider-anecdotes/internal/client"
-	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -43,15 +44,14 @@ type ControlResourceModel struct {
 	Name        types.String `tfsdk:"name"`
 
 	// Control content
-	Description  types.String `tfsdk:"description"`
-	CategoryID   types.String `tfsdk:"category_id"`
-	CategoryName types.String `tfsdk:"category_name"`
+	Description types.String `tfsdk:"description"`
+	CategoryID  types.String `tfsdk:"category_id"`
 
 	// Maturity
 	MaturityLevel types.String `tfsdk:"maturity_level"`
 
 	// Ownership and assignment
-	Owners types.List `tfsdk:"owners"`
+	Owners types.Set `tfsdk:"owners"`
 }
 
 func (r *ControlResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -122,35 +122,23 @@ Framework (anecdotes_framework)
 				Required:            true,
 			},
 
-			"category_name": schema.StringAttribute{
-				Description: "The name of the control category (computed from category_id).",
-				Computed:    true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
-				},
-			},
-
 			// Maturity
 			"maturity_level": schema.StringAttribute{
-				Description:         "The maturity level of the control. One of: INITIAL, REPEATABLE, DEFINED, MANAGED, OPTIMIZING. Platform default is INITIAL.",
-				MarkdownDescription: "The maturity level of the control. One of: `INITIAL`, `REPEATABLE`, `DEFINED`, `MANAGED`, `OPTIMIZING`. Platform default is `INITIAL`.",
+				Description:         "The maturity level of the control. One of: INITIAL, REPEATABLE, DEFINED, MANAGED, OPTIMIZING. A control has no maturity level until one is set; removing the attribute clears it.",
+				MarkdownDescription: "The maturity level of the control. One of: `INITIAL`, `REPEATABLE`, `DEFINED`, `MANAGED`, `OPTIMIZING`. A control has no maturity level until one is set; removing the attribute clears it.",
 				Optional:            true,
-				Computed:            true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
-				},
 				Validators: []validator.String{
 					stringvalidator.OneOf(client.ValidMaturityLevels()...),
 				},
 			},
 
 			// Ownership and assignment
-			"owners": schema.ListAttribute{
-				Description: "List of email addresses of users who own this control. Owners are responsible for maintaining and updating the control.",
+			"owners": schema.SetAttribute{
+				Description: "Email addresses of users who own this control. Owners are responsible for maintaining and updating the control. Order does not matter. Terraform owns this attribute: removing it clears the owners.",
 				Optional:    true,
 				ElementType: types.StringType,
-				Validators: []validator.List{
-					listvalidator.ValueStringsAre(
+				Validators: []validator.Set{
+					setvalidator.ValueStringsAre(
 						stringvalidator.RegexMatches(
 							regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`),
 							"must be a valid email address",
@@ -219,9 +207,7 @@ func (r *ControlResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
-	// Set computed values
 	data.ControlID = types.StringValue(control.ControlID)
-	data.CategoryName = types.StringValue(category.CategoryName)
 
 	// Set maturity level if user specified it (separate API call)
 	if !data.MaturityLevel.IsNull() && !data.MaturityLevel.IsUnknown() {
@@ -233,17 +219,6 @@ func (r *ControlResource) Create(ctx context.Context, req resource.CreateRequest
 			resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 			addClientError(&resp.Diagnostics, "set control maturity level", err)
 			return
-		}
-	}
-
-	// Populate maturity level from the platform when not explicitly set. When
-	// the platform has no maturity value (or the lookup fails), record null —
-	// a Computed attribute must not remain unknown after apply.
-	if data.MaturityLevel.IsNull() || data.MaturityLevel.IsUnknown() {
-		if level, err := r.client.GetControlMaturityLevel(control.ControlID); err == nil && level != "" && level != "0" {
-			data.MaturityLevel = types.StringValue(level)
-		} else {
-			data.MaturityLevel = types.StringNull()
 		}
 	}
 
@@ -269,32 +244,44 @@ func (r *ControlResource) Read(ctx context.Context, req resource.ReadRequest, re
 		return
 	}
 
+	if control.ControlIsCustom != nil && !*control.ControlIsCustom {
+		resp.Diagnostics.AddError(
+			"Control cannot be managed by Terraform",
+			fmt.Sprintf(
+				"Control %s is provided by the Anecdotes platform. Only custom controls can be updated or deleted, "+
+					"so Terraform cannot manage it.\n\n"+
+					"Read it with the anecdotes_control or anecdotes_controls data source instead. If it is already "+
+					"in state, remove it with `terraform state rm` before applying again.",
+				data.ControlID.ValueString(),
+			),
+		)
+		return
+	}
+
 	// Update state with API response
 	data.Name = types.StringValue(control.ControlName)
 	data.Description = types.StringValue(control.ControlDescription)
-	// Get category name from API response (try multiple field names)
-	categoryName := control.ControlFrameworkCategory
-	if categoryName == "" {
-		categoryName = control.ControlCategory
-	}
-	data.CategoryName = types.StringValue(categoryName)
-	// Keep category_id from state (API may not return it)
 	if control.ControlFrameworkCategoryID != "" {
 		data.CategoryID = types.StringValue(control.ControlFrameworkCategoryID)
 	}
 
-	// Update owners
+	// An empty set and an unset attribute are distinct.
 	if len(control.ControlOwners) > 0 {
-		ownersList, diags := types.ListValueFrom(ctx, types.StringType, control.ControlOwners)
+		ownersSet, diags := types.SetValueFrom(ctx, types.StringType, control.ControlOwners)
 		resp.Diagnostics.Append(diags...)
-		data.Owners = ownersList
+		data.Owners = ownersSet
+	} else if !data.Owners.IsNull() {
+		data.Owners = types.SetValueMust(types.StringType, []attr.Value{})
 	} else {
-		data.Owners = types.ListNull(types.StringType)
+		data.Owners = types.SetNull(types.StringType)
 	}
 
-	// Update maturity level from the platform
-	if level, err := r.client.GetControlMaturityLevel(data.ControlID.ValueString()); err == nil && level != "" && level != "0" {
-		data.MaturityLevel = types.StringValue(level)
+	if level, err := r.client.GetControlMaturityLevel(data.ControlID.ValueString()); err == nil {
+		if level == "" {
+			data.MaturityLevel = types.StringNull()
+		} else {
+			data.MaturityLevel = types.StringValue(level)
+		}
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -323,11 +310,10 @@ func (r *ControlResource) Update(ctx context.Context, req resource.UpdateRequest
 		ControlFrameworkCategoryID: data.CategoryID.ValueString(),
 	}
 
-	// Handle owners
+	// Terraform owns the attribute: absent means no owners.
+	owners := []string{}
 	if !data.Owners.IsNull() && !data.Owners.IsUnknown() {
-		var owners []string
 		resp.Diagnostics.Append(data.Owners.ElementsAs(ctx, &owners, false)...)
-		updateReq.ControlOwners = owners
 	}
 
 	if resp.Diagnostics.HasError() {
@@ -335,28 +321,20 @@ func (r *ControlResource) Update(ctx context.Context, req resource.UpdateRequest
 	}
 
 	// Call API
-	_, err = r.client.UpdateControl(data.FrameworkID.ValueString(), data.ControlID.ValueString(), updateReq)
-	if err != nil {
+	if _, err := r.client.UpdateControl(data.FrameworkID.ValueString(), data.ControlID.ValueString(), updateReq); err != nil {
 		addClientError(&resp.Diagnostics, "update control", err)
 		return
 	}
 
-	// Set maturity level if user specified it (separate API call)
-	if !data.MaturityLevel.IsNull() && !data.MaturityLevel.IsUnknown() {
-		if err := r.client.SetControlMaturityLevel(data.ControlID.ValueString(), data.MaturityLevel.ValueString()); err != nil {
-			addClientError(&resp.Diagnostics, "set control maturity level", err)
-			return
-		}
+	if err := r.client.SetControlOwners(data.ControlID.ValueString(), owners); err != nil {
+		addClientError(&resp.Diagnostics, "set control owners", err)
+		return
 	}
 
-	// Update computed values
-	data.CategoryName = types.StringValue(category.CategoryName)
-
-	// Populate maturity level from the platform when not explicitly set
-	if data.MaturityLevel.IsNull() || data.MaturityLevel.IsUnknown() {
-		if level, err := r.client.GetControlMaturityLevel(data.ControlID.ValueString()); err == nil && level != "" && level != "0" {
-			data.MaturityLevel = types.StringValue(level)
-		}
+	// An absent attribute clears the maturity level.
+	if err := r.client.SetControlMaturityLevel(data.ControlID.ValueString(), data.MaturityLevel.ValueString()); err != nil {
+		addClientError(&resp.Diagnostics, "set control maturity level", err)
+		return
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -371,7 +349,7 @@ func (r *ControlResource) Delete(ctx context.Context, req resource.DeleteRequest
 	}
 
 	err := r.client.DeleteControl(data.FrameworkID.ValueString(), data.ControlID.ValueString())
-	if err != nil {
+	if err != nil && !client.IsNotFound(err) {
 		addClientError(&resp.Diagnostics, "delete control", err)
 		return
 	}

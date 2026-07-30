@@ -51,8 +51,6 @@ output "soc2_references" {
 - `can_auditor_view_control_custom_fields` (Boolean) Whether auditors can view custom fields on controls in this framework.
 - `can_auditor_view_soa_report` (Boolean) Whether auditors can view the Statement of Applicability (SOA) report.
 - `can_auditor_view_tags` (Boolean) Whether auditors can view tags on controls in this framework.
-- `categories` (Attributes List) The control categories within the framework (if populated by API). (see [below for nested schema](#nestedatt--categories))
-- `controls` (Attributes List) The controls within the framework (if populated by API). (see [below for nested schema](#nestedatt--controls))
 - `description` (String) A detailed description of the framework and its purpose.
 - `framework_auditable` (Boolean) Whether auditors can access this framework.
 - `framework_auditor_control_status` (Attributes) Configuration for which control statuses are visible to auditors. (see [below for nested schema](#nestedatt--framework_auditor_control_status))
@@ -67,30 +65,6 @@ output "soc2_references" {
 - `is_applicable` (Boolean) Whether this framework is adopted/applicable for the organization.
 - `name` (String) The human-readable name of the framework (e.g., 'SOC 2', 'ISO-IEC 27001 2022').
 - `unadopted_order` (Number) Display order for unadopted frameworks in the framework library.
-
-<a id="nestedatt--categories"></a>
-### Nested Schema for `categories`
-
-Read-Only:
-
-- `category_id` (String) The unique identifier of the category.
-- `description` (String) A description of the category.
-- `name` (String) The name of the category.
-
-
-<a id="nestedatt--controls"></a>
-### Nested Schema for `controls`
-
-Read-Only:
-
-- `category` (String) The category this control belongs to.
-- `control_id` (String) The unique identifier of the control.
-- `description` (String) A detailed description of the control.
-- `name` (String) The human-readable name of the control.
-- `owners` (List of String) List of email addresses of users who own this control.
-- `status` (String) The current status of the control.
-- `tags` (List of String) Tags applied to the control.
-
 
 <a id="nestedatt--framework_auditor_control_status"></a>
 ### Nested Schema for `framework_auditor_control_status`

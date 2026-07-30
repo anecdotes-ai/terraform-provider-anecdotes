@@ -39,16 +39,27 @@ Framework (anecdotes_framework)
 ## Example Usage
 
 ```terraform
+resource "anecdotes_framework_folder" "compliance" {
+  name = "Compliance Frameworks"
+}
+
 resource "anecdotes_framework" "soc2" {
-  name = "SOC2 Type II"
+  name        = "SOC2 Type II"
+  description = "SOC 2 Type II framework"
+  folder_id   = anecdotes_framework_folder.compliance.folder_id
+}
+
+resource "anecdotes_control_category" "common_criteria" {
+  framework_id = anecdotes_framework.soc2.framework_id
+  name         = "Common Criteria"
 }
 
 resource "anecdotes_control" "access_reviews" {
   framework_id = anecdotes_framework.soc2.framework_id
+  category_id  = anecdotes_control_category.common_criteria.category_id
 
   name        = "CC6.1 - Access reviews are performed quarterly"
   description = "The entity performs periodic access reviews to ensure appropriate access levels"
-  category    = "Common Criteria"
 
   # Maturity level. One of: INITIAL, REPEATABLE, DEFINED, MANAGED, OPTIMIZING.
   maturity_level = "DEFINED"
@@ -69,12 +80,11 @@ resource "anecdotes_control" "access_reviews" {
 ### Optional
 
 - `description` (String) A detailed description of the control and its implementation requirements.
-- `maturity_level` (String) The maturity level of the control. One of: `INITIAL`, `REPEATABLE`, `DEFINED`, `MANAGED`, `OPTIMIZING`. Platform default is `INITIAL`.
-- `owners` (List of String) List of email addresses of users who own this control. Owners are responsible for maintaining and updating the control.
+- `maturity_level` (String) The maturity level of the control. One of: `INITIAL`, `REPEATABLE`, `DEFINED`, `MANAGED`, `OPTIMIZING`. A control has no maturity level until one is set; removing the attribute clears it.
+- `owners` (Set of String) Email addresses of users who own this control. Owners are responsible for maintaining and updating the control. Order does not matter. Terraform owns this attribute: removing it clears the owners.
 
 ### Read-Only
 
-- `category_name` (String) The name of the control category (computed from category_id).
 - `control_id` (String) The unique identifier of the control in Anecdotes (e.g., `control_55312`).
 
 ## Import

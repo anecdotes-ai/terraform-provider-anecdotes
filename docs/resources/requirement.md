@@ -60,8 +60,8 @@ Status values can be customized per organization, but common defaults include:
 resource "anecdotes_requirement" "quarterly_access_review" {
   name        = "Perform quarterly user access review"
   description = "Review all user access rights quarterly and remove inappropriate access"
-  category    = "Access Reviews"
-  owner       = "security@example.com"
+  category    = "Access"
+  owners      = ["security@example.com"]
 }
 
 # This requirement can satisfy multiple controls across frameworks
@@ -85,9 +85,9 @@ resource "anecdotes_mapping_control_requirement" "iso_link" {
 
 ### Optional
 
-- `category` (String) The category this requirement belongs to. Categories are free-form (any string is accepted; e.g., 'Privacy', 'Security', 'Access Control'). Defaults to 'Custom Requirements' if not specified.
+- `category` (String) The category this requirement belongs to. Must be one of the Anecdotes requirement categories. Defaults to `Custom Requirements`. Removing the attribute restores the default; an empty string is not a valid category.
 - `description` (String) A detailed description/help text explaining what this requirement entails. Supports HTML.
-- `owners` (List of String) Email addresses of users responsible for this requirement.
+- `owners` (Set of String) Email addresses of users responsible for this requirement. Order does not matter. Terraform owns this attribute: removing it clears the owners.
 
 ### Read-Only
 

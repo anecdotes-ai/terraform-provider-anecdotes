@@ -6,9 +6,12 @@ package provider
 import (
 	"context"
 	"fmt"
+	"regexp"
 
 	"github.com/anecdotes-ai/terraform-provider-anecdotes/internal/client"
+	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -44,7 +47,7 @@ type RequirementResourceModel struct {
 	Category    types.String `tfsdk:"category"`
 
 	// Ownership
-	Owners types.List `tfsdk:"owners"`
+	Owners types.Set `tfsdk:"owners"`
 }
 
 func (r *RequirementResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -112,18 +115,29 @@ Status values can be customized per organization, but common defaults include:
 			},
 
 			"category": schema.StringAttribute{
-				Description: "The category this requirement belongs to. Categories are free-form (any string is accepted; e.g., 'Privacy', 'Security', 'Access Control'). Defaults to 'Custom Requirements' if not specified.",
-				Optional:    true,
-				Computed:    true,
-				Default:     stringdefault.StaticString("Custom Requirements"),
+				Description:         "The category this requirement belongs to. Must be one of the Anecdotes requirement categories. Defaults to 'Custom Requirements'.",
+				MarkdownDescription: "The category this requirement belongs to. Must be one of the Anecdotes requirement categories. Defaults to `Custom Requirements`. Removing the attribute restores the default; an empty string is not a valid category.",
+				Optional:            true,
+				Computed:            true,
+				Default:             stringdefault.StaticString("Custom Requirements"),
+				Validators: []validator.String{
+					stringvalidator.OneOf(client.ValidRequirementCategories()...),
+				},
 			},
 
 			// Ownership
-			"owners": schema.ListAttribute{
-				Description: "Email addresses of users responsible for this requirement.",
+			"owners": schema.SetAttribute{
+				Description: "Email addresses of users responsible for this requirement. Order does not matter. Terraform owns this attribute: removing it clears the owners.",
 				Optional:    true,
-				Computed:    true,
 				ElementType: types.StringType,
+				Validators: []validator.Set{
+					setvalidator.ValueStringsAre(
+						stringvalidator.RegexMatches(
+							regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`),
+							"must be a valid email address",
+						),
+					),
+				},
 			},
 		},
 	}
@@ -154,12 +168,7 @@ func (r *RequirementResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 
-	// Save planned values — the API create response (or adopt-existing fallback)
-	// may not echo back these fields correctly.
-	plannedCategory := data.Category
-	plannedName := data.Name
-	plannedDescription := data.Description
-	plannedOwners := data.Owners
+	planned := data
 
 	// Build create request
 	// API mapping: name → requirement_description, description → requirement_help
@@ -181,7 +190,7 @@ func (r *RequirementResource) Create(ctx context.Context, req resource.CreateReq
 	}
 
 	// Call API
-	requirement, err := r.client.CreateRequirement(createReq)
+	requirement, recovered, err := r.client.CreateRequirement(createReq)
 	if err != nil {
 		addClientError(&resp.Diagnostics, "create requirement", err)
 		return
@@ -193,20 +202,14 @@ func (r *RequirementResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 
-	// Preserve ALL planned values that the API create response (or adopt-existing
-	// fallback) may not echo back correctly. This prevents plan/state mismatches
-	// that Terraform reports as "bug in the provider".
-	if !plannedCategory.IsNull() && !plannedCategory.IsUnknown() {
-		data.Category = plannedCategory
-	}
-	if !plannedName.IsNull() && !plannedName.IsUnknown() {
-		data.Name = plannedName
-	}
-	if !plannedDescription.IsNull() && !plannedDescription.IsUnknown() {
-		data.Description = plannedDescription
-	}
-	if !plannedOwners.IsNull() && !plannedOwners.IsUnknown() {
-		data.Owners = plannedOwners
+	// A requirement recovered by name after an ambiguous error may differ from
+	// what was planned. Keep the planned values so the resource stays tracked;
+	// the next refresh reports the real values.
+	if recovered {
+		data.Name = planned.Name
+		data.Description = planned.Description
+		data.Category = planned.Category
+		data.Owners = planned.Owners
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -250,21 +253,22 @@ func (r *RequirementResource) Update(ctx context.Context, req resource.UpdateReq
 
 	// Build update request
 	// API mapping: name → requirement_description, description → requirement_help
+	help := data.Description.ValueString()
 	updateReq := &client.RequirementUpdateRequest{
-		RequirementDescription: data.Name.ValueString(),        // Title/name goes to requirement_description
-		RequirementHelp:        data.Description.ValueString(), // Description goes to requirement_help
+		RequirementDescription: data.Name.ValueString(), // Title/name goes to requirement_description
+		RequirementHelp:        &help,                   // Description goes to requirement_help
 		RequirementCategory:    data.Category.ValueString(),
 	}
 
-	// Handle owners list
+	// Terraform owns the attribute: absent means no owners.
+	owners := []string{}
 	if !data.Owners.IsNull() && !data.Owners.IsUnknown() {
-		var owners []string
 		resp.Diagnostics.Append(data.Owners.ElementsAs(ctx, &owners, false)...)
 		if resp.Diagnostics.HasError() {
 			return
 		}
-		updateReq.RequirementOwners = &owners
 	}
+	updateReq.RequirementOwners = &owners
 
 	// Call API
 	requirement, err := r.client.UpdateRequirement(data.RequirementID.ValueString(), updateReq)
@@ -291,7 +295,7 @@ func (r *RequirementResource) Delete(ctx context.Context, req resource.DeleteReq
 	}
 
 	err := r.client.DeleteRequirement(data.RequirementID.ValueString())
-	if err != nil {
+	if err != nil && !client.IsNotFound(err) {
 		addClientError(&resp.Diagnostics, "delete requirement", err)
 		return
 	}
@@ -317,12 +321,14 @@ func (r *RequirementResource) setRequirementState(ctx context.Context, data *Req
 	data.Description = types.StringValue(requirement.RequirementHelp)
 	data.Category = types.StringValue(requirement.RequirementCategory)
 
-	// Set owners
+	// An empty set and an unset attribute are distinct.
 	if len(requirement.RequirementOwners) > 0 {
-		ownersList, d := types.ListValueFrom(ctx, types.StringType, requirement.RequirementOwners)
+		ownersSet, d := types.SetValueFrom(ctx, types.StringType, requirement.RequirementOwners)
 		diags.Append(d...)
-		data.Owners = ownersList
+		data.Owners = ownersSet
+	} else if !data.Owners.IsNull() {
+		data.Owners = types.SetValueMust(types.StringType, []attr.Value{})
 	} else {
-		data.Owners = types.ListNull(types.StringType)
+		data.Owners = types.SetNull(types.StringType)
 	}
 }

@@ -63,10 +63,6 @@ type FrameworkDataSourceModel struct {
 
 	// Ordering
 	UnadoptedOrder types.Int64 `tfsdk:"unadopted_order"`
-
-	// Detailed data (controls/categories are retrieved separately)
-	Controls   types.List `tfsdk:"controls"`
-	Categories types.List `tfsdk:"categories"`
 }
 
 func (d *FrameworkDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -250,67 +246,6 @@ for use in other resources or to export framework configuration.
 				Description: "Display order for unadopted frameworks in the framework library.",
 				Computed:    true,
 			},
-
-			// ==================== Controls and Categories ====================
-			"controls": schema.ListNestedAttribute{
-				Description: "The controls within the framework (if populated by API).",
-				Computed:    true,
-				NestedObject: schema.NestedAttributeObject{
-					Attributes: map[string]schema.Attribute{
-						"control_id": schema.StringAttribute{
-							Description: "The unique identifier of the control.",
-							Computed:    true,
-						},
-						"name": schema.StringAttribute{
-							Description: "The human-readable name of the control.",
-							Computed:    true,
-						},
-						"description": schema.StringAttribute{
-							Description: "A detailed description of the control.",
-							Computed:    true,
-						},
-						"category": schema.StringAttribute{
-							Description: "The category this control belongs to.",
-							Computed:    true,
-						},
-						"status": schema.StringAttribute{
-							Description: "The current status of the control.",
-							Computed:    true,
-						},
-						"owners": schema.ListAttribute{
-							Description: "List of email addresses of users who own this control.",
-							Computed:    true,
-							ElementType: types.StringType,
-						},
-						"tags": schema.ListAttribute{
-							Description: "Tags applied to the control.",
-							Computed:    true,
-							ElementType: types.StringType,
-						},
-					},
-				},
-			},
-
-			"categories": schema.ListNestedAttribute{
-				Description: "The control categories within the framework (if populated by API).",
-				Computed:    true,
-				NestedObject: schema.NestedAttributeObject{
-					Attributes: map[string]schema.Attribute{
-						"category_id": schema.StringAttribute{
-							Description: "The unique identifier of the category.",
-							Computed:    true,
-						},
-						"name": schema.StringAttribute{
-							Description: "The name of the category.",
-							Computed:    true,
-						},
-						"description": schema.StringAttribute{
-							Description: "A description of the category.",
-							Computed:    true,
-						},
-					},
-				},
-			},
 		},
 	}
 }
@@ -454,86 +389,6 @@ func (d *FrameworkDataSource) Read(ctx context.Context, req datasource.ReadReque
 
 	// ==================== Ordering ====================
 	data.UnadoptedOrder = types.Int64Value(int64(framework.UnadoptedOrder))
-
-	// ==================== Controls and Categories ====================
-	controlsObjType := types.ObjectType{
-		AttrTypes: map[string]attr.Type{
-			"control_id":  types.StringType,
-			"name":        types.StringType,
-			"description": types.StringType,
-			"category":    types.StringType,
-			"status":      types.StringType,
-			"owners":      types.ListType{ElemType: types.StringType},
-			"tags":        types.ListType{ElemType: types.StringType},
-		},
-	}
-
-	if len(framework.Controls) > 0 {
-		controls := make([]map[string]attr.Value, len(framework.Controls))
-		for i, ctrl := range framework.Controls {
-			// Build owners list
-			var ownersList types.List
-			if len(ctrl.ControlOwners) > 0 {
-				ownersListValue, ownersListDiags := types.ListValueFrom(ctx, types.StringType, ctrl.ControlOwners)
-				ownersList = ownersListValue
-				resp.Diagnostics.Append(ownersListDiags...)
-			} else {
-				ownersList = types.ListNull(types.StringType)
-			}
-
-			// Build tags list
-			var tagsList types.List
-			if len(ctrl.ControlTags) > 0 {
-				tagsListValue, tagsListDiags := types.ListValueFrom(ctx, types.StringType, ctrl.ControlTags)
-				tagsList = tagsListValue
-				resp.Diagnostics.Append(tagsListDiags...)
-			} else {
-				tagsList = types.ListNull(types.StringType)
-			}
-
-			controls[i] = map[string]attr.Value{
-				"control_id":  types.StringValue(ctrl.ControlID),
-				"name":        types.StringValue(ctrl.ControlName),
-				"description": types.StringValue(ctrl.ControlDescription),
-				"category":    types.StringValue(ctrl.ControlCategory),
-				"status":      types.StringValue(ctrl.ControlStatus.Status),
-				"owners":      ownersList,
-				"tags":        tagsList,
-			}
-		}
-
-		controlsList, diags := types.ListValueFrom(ctx, controlsObjType, controls)
-		resp.Diagnostics.Append(diags...)
-		data.Controls = controlsList
-	} else {
-		data.Controls = types.ListNull(controlsObjType)
-	}
-
-	// Convert categories
-	categoriesObjType := types.ObjectType{
-		AttrTypes: map[string]attr.Type{
-			"category_id": types.StringType,
-			"name":        types.StringType,
-			"description": types.StringType,
-		},
-	}
-
-	if len(framework.Categories) > 0 {
-		categories := make([]map[string]attr.Value, len(framework.Categories))
-		for i, cat := range framework.Categories {
-			categories[i] = map[string]attr.Value{
-				"category_id": types.StringValue(cat.CategoryID),
-				"name":        types.StringValue(cat.CategoryName),
-				"description": types.StringValue(cat.Description),
-			}
-		}
-
-		categoriesList, diags := types.ListValueFrom(ctx, categoriesObjType, categories)
-		resp.Diagnostics.Append(diags...)
-		data.Categories = categoriesList
-	} else {
-		data.Categories = types.ListNull(categoriesObjType)
-	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
