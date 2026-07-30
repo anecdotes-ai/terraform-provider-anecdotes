@@ -61,7 +61,7 @@ terraform apply
 ## Resource Model
 
 ```
-anecdotes_framework_folder        # Optional folder that groups frameworks
+anecdotes_framework_folder        # Folder that groups frameworks
     │
     └── anecdotes_framework        # Compliance standard (SOC 2, ISO 27001, ...)
             │
@@ -77,7 +77,7 @@ anecdotes_framework_folder        # Optional folder that groups frameworks
 ```
 
 - **Framework** — a compliance standard container (for example SOC 2, ISO 27001).
-- **Framework folder** — an optional container that groups frameworks.
+- **Framework folder** — a container that groups frameworks. Every framework belongs to one.
 - **Control** — a prescriptive statement of what should be implemented, grouped by control category.
 - **Requirement** — an operational action that satisfies controls; requirements can be shared across frameworks.
 - **Mappings** — the M:N links between controls and requirements, and between requirements and evidence.
@@ -140,7 +140,10 @@ make docs       # regenerate docs/ with tfplugindocs
 
 See [docs/guides/LOCAL_DEVELOPMENT.md](docs/guides/LOCAL_DEVELOPMENT.md) for local
 development setup and [docs/guides/TESTING.md](docs/guides/TESTING.md) for the
-testing guide.
+testing guide. For provider behavior, see
+[docs/guides/DRIFT.md](docs/guides/DRIFT.md) — which attributes Terraform owns and
+how to absorb changes made in the Anecdotes application — and
+[docs/guides/KNOWN_LIMITATIONS.md](docs/guides/KNOWN_LIMITATIONS.md).
 
 ---
 

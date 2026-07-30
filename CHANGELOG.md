@@ -49,7 +49,8 @@ compliance surface of the Anecdotes GRC platform.
 - Full create, read, update, delete, and import support for the resources above
   (the two mapping resources support create, read, delete, and import).
 - Plan-time validation of enumerated attributes (control maturity level,
-  framework auditor visibility, and data-source filters), and typed, redacted
-  API error handling.
+  requirement category, framework auditor visibility, and data-source filters),
+  and typed, redacted API error handling.
 - Generated documentation for every resource and data source, runnable examples,
-  and local-development, testing, and known-limitations guides.
+  and guides for drift and field ownership, local development, testing, and
+  known limitations.
