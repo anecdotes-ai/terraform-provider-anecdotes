@@ -16,21 +16,63 @@ func TestAccControlResource_create(t *testing.T) {
 	fwName := randomName("fw")
 	catName := randomName("cat")
 	ctrlName := randomName("ctrl")
+	const owner = "acceptance-tests@example.com"
+
+	config := testAccControlCategoryConfig(fwName, catName) + fmt.Sprintf(`
+resource "anecdotes_control" "test" {
+  name         = %q
+  framework_id = anecdotes_framework.test.framework_id
+  category_id  = anecdotes_control_category.test.category_id
+  owners       = [%q]
+}`, ctrlName, owner)
+
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccControlConfig(fwName, catName, ctrlName),
+				Config: config,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("anecdotes_control.test", "name", ctrlName),
 					resource.TestCheckResourceAttrSet("anecdotes_control.test", "control_id"),
 					resource.TestCheckResourceAttrSet("anecdotes_control.test", "framework_id"),
 					resource.TestCheckResourceAttrSet("anecdotes_control.test", "category_id"),
+					// Assert against the platform, not only against state: a
+					// value dropped on write and absent on read agrees with
+					// state while never reaching the platform.
+					testCheckControlOwnersOnPlatform(t, "anecdotes_control.test", owner),
 				),
 			},
 		},
 	})
+}
+
+// testCheckControlOwnersOnPlatform reads the control back from the API and
+// asserts the owners a create applied are actually stored.
+func testCheckControlOwnersOnPlatform(t *testing.T, resourceName string, want ...string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		controlID, err := stateAttr(s, resourceName, "control_id")
+		if err != nil {
+			return err
+		}
+		frameworkID, err := stateAttr(s, resourceName, "framework_id")
+		if err != nil {
+			return err
+		}
+		control, err := testAccNewClient(t).GetControl(frameworkID, controlID)
+		if err != nil {
+			return fmt.Errorf("reading control %s: %w", controlID, err)
+		}
+		if len(control.ControlOwners) != len(want) {
+			return fmt.Errorf("expected %d owners on the platform, got %v", len(want), control.ControlOwners)
+		}
+		for i, w := range want {
+			if control.ControlOwners[i] != w {
+				return fmt.Errorf("owner %d: expected %q on the platform, got %q", i, w, control.ControlOwners[i])
+			}
+		}
+		return nil
+	}
 }
 
 func TestAccControlResource_update(t *testing.T) {

@@ -73,6 +73,28 @@ func TestSetControlOwners_SendsSingularFieldAndClears(t *testing.T) {
 	}
 }
 
+// Owners are sent on create as well as update, under the same field name.
+func TestControlCreateRequest_SendsOwnersUnderTheSameField(t *testing.T) {
+	encoded, err := json.Marshal(&ControlCreateRequest{
+		ControlName:   "c",
+		ControlOwners: []string{"a@example.com", "b@example.com"},
+	})
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var decoded map[string]interface{}
+	if err := json.Unmarshal(encoded, &decoded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	owners, ok := decoded["control_owner"]
+	if !ok {
+		t.Fatalf("owners must be sent as control_owner on create, got keys %v", keysOf(decoded))
+	}
+	if got := owners.([]interface{}); len(got) != 2 {
+		t.Errorf("expected both owners, got %v", got)
+	}
+}
+
 func TestSetControlMaturityLevel_ClearsWithNull(t *testing.T) {
 	body := captureRequest(t, func(c *AnecdotesClient) error {
 		return c.SetControlMaturityLevel("c1", "")
