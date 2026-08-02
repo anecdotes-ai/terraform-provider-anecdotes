@@ -56,23 +56,14 @@ Status values can be customized per organization, but common defaults include:
 ## Example Usage
 
 ```terraform
-# Create a standalone requirement
+# A requirement is a standalone object. Link it to one or more controls with
+# anecdotes_mapping_control_requirement — the same requirement can satisfy
+# controls in different frameworks.
 resource "anecdotes_requirement" "quarterly_access_review" {
   name        = "Perform quarterly user access review"
   description = "Review all user access rights quarterly and remove inappropriate access"
   category    = "Access"
   owners      = ["security@example.com"]
-}
-
-# This requirement can satisfy multiple controls across frameworks
-resource "anecdotes_mapping_control_requirement" "soc2_link" {
-  control_id     = anecdotes_control.soc2_access_control.control_id
-  requirement_id = anecdotes_requirement.quarterly_access_review.requirement_id
-}
-
-resource "anecdotes_mapping_control_requirement" "iso_link" {
-  control_id     = anecdotes_control.iso_access_control.control_id
-  requirement_id = anecdotes_requirement.quarterly_access_review.requirement_id # Same requirement!
 }
 ```
 
@@ -85,7 +76,7 @@ resource "anecdotes_mapping_control_requirement" "iso_link" {
 
 ### Optional
 
-- `category` (String) The category this requirement belongs to. Must be one of the Anecdotes requirement categories. Defaults to `Custom Requirements`. Removing the attribute restores the default; an empty string is not a valid category.
+- `category` (String) The category this requirement belongs to. One of the categories Anecdotes defines; requirements that do not fit one of them belong under `Custom Requirements`, which is also the default. Removing the attribute restores the default.
 - `description` (String) A detailed description/help text explaining what this requirement entails. Supports HTML.
 - `owners` (Set of String) Email addresses of users responsible for this requirement. Order does not matter. Terraform owns this attribute: removing it clears the owners.
 

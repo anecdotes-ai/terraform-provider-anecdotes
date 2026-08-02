@@ -86,8 +86,9 @@ time.
 Fields with a closed value set — `anecdotes_control.maturity_level`,
 `anecdotes_requirement.category`, and the auditor visibility statuses — are
 validated at plan time; values outside the set are rejected before any API call.
-Requirement categories match the categories available in the Requirements Hub;
-to use a category that is not listed, create the requirement under
+
+Requirement categories are the categories Anecdotes defines, the same list the
+Requirements Hub offers. Requirements that do not fit one of them belong under
 `Custom Requirements`.
 
 ## Error reporting

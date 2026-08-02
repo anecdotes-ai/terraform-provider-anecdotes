@@ -115,8 +115,8 @@ Status values can be customized per organization, but common defaults include:
 			},
 
 			"category": schema.StringAttribute{
-				Description:         "The category this requirement belongs to. Must be one of the Anecdotes requirement categories. Defaults to 'Custom Requirements'.",
-				MarkdownDescription: "The category this requirement belongs to. Must be one of the Anecdotes requirement categories. Defaults to `Custom Requirements`. Removing the attribute restores the default; an empty string is not a valid category.",
+				Description:         "The category this requirement belongs to. Must be one of the categories Anecdotes defines. Defaults to 'Custom Requirements'.",
+				MarkdownDescription: "The category this requirement belongs to. One of the categories Anecdotes defines; requirements that do not fit one of them belong under `Custom Requirements`, which is also the default. Removing the attribute restores the default.",
 				Optional:            true,
 				Computed:            true,
 				Default:             stringdefault.StaticString("Custom Requirements"),
