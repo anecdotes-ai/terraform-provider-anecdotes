@@ -33,10 +33,16 @@ Framework (this resource)
 ## Example Usage
 
 ```terraform
+# Frameworks are placed in a folder
+resource "anecdotes_framework_folder" "internal" {
+  name = "Internal Frameworks"
+}
+
 # Create a custom framework with auditor configuration
 resource "anecdotes_framework" "custom_security" {
   name        = "Custom Security Framework"
   description = "Internal security controls for our organization"
+  folder_id   = anecdotes_framework_folder.internal.folder_id
 
   # Auditor access settings
   can_auditor_download_evidence = true
@@ -67,6 +73,8 @@ resource "anecdotes_framework" "custom_security" {
 
 ### Required
 
+- `description` (String) A detailed description of the framework and its purpose. The platform requires a non-empty description.
+- `folder_id` (String) The ID of the folder this framework is placed in. Changing it moves the framework to the new folder. Use `anecdotes_framework_folder` to create folders.
 - `name` (String) The human-readable name of the framework (e.g., 'SOC 2', 'ISO-IEC 27001 2022').
 
 ### Optional
@@ -78,8 +86,6 @@ resource "anecdotes_framework" "custom_security" {
 - `can_auditor_view_control_custom_fields` (Boolean) Whether auditors can view custom fields on controls in this framework.
 - `can_auditor_view_soa_report` (Boolean) Whether auditors can view the Statement of Applicability (SOA) report for this framework.
 - `can_auditor_view_tags` (Boolean) Whether auditors can view tags on controls in this framework.
-- `description` (String) A detailed description of the framework and its purpose.
-- `folder_id` (String) The ID of the folder where this framework will be placed. Optional for import.
 
 ### Read-Only
 

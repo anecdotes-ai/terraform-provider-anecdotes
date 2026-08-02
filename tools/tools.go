@@ -1,3 +1,6 @@
+// Copyright (c) Anecdotes AI
+// SPDX-License-Identifier: MPL-2.0
+
 //go:build tools
 
 package tools

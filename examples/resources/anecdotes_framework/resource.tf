@@ -1,7 +1,13 @@
+# Frameworks are placed in a folder
+resource "anecdotes_framework_folder" "internal" {
+  name = "Internal Frameworks"
+}
+
 # Create a custom framework with auditor configuration
 resource "anecdotes_framework" "custom_security" {
   name        = "Custom Security Framework"
   description = "Internal security controls for our organization"
+  folder_id   = anecdotes_framework_folder.internal.folder_id
 
   # Auditor access settings
   can_auditor_download_evidence = true

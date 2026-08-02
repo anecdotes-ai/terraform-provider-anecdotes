@@ -79,25 +79,6 @@ type Framework struct {
 
 	// Ordering
 	UnadoptedOrder int `json:"unadopted_order,omitempty"`
-
-	// Aliases and detail fields returned by some endpoints
-	Description   string     `json:"description,omitempty"` // Alias for framework_description
-	FolderName    string     `json:"folder_name,omitempty"`
-	FolderID      string     `json:"folder_id,omitempty"`
-	Controls      []Control  `json:"controls,omitempty"`
-	Categories    []Category `json:"categories,omitempty"`
-	CreatedAt     string     `json:"created_at,omitempty"`
-	UpdatedAt     string     `json:"updated_at,omitempty"`
-	IsManaged     bool       `json:"is_managed"`
-	FrameworkType string     `json:"framework_type,omitempty"`
-}
-
-// Category represents a control category within a framework
-type Category struct {
-	CategoryID   string `json:"category_id"`
-	CategoryName string `json:"category_name"`
-	Description  string `json:"description,omitempty"`
-	SortOrder    int    `json:"sort_order,omitempty"`
 }
 
 // ControlStatusObject represents the control status as returned by the API
@@ -127,8 +108,12 @@ type Control struct {
 	ControlStatus          ControlStatusObject `json:"control_status"`
 	ControlStatusUpdatedBy string              `json:"control_status_updated_by,omitempty"`
 
+	// Only custom controls can be modified. A nil value means the platform did
+	// not report it.
+	ControlIsCustom *bool `json:"control_is_custom,omitempty"`
+
 	// Ownership and assignment
-	ControlOwners []string `json:"control_owners,omitempty"`
+	ControlOwners []string `json:"control_owner,omitempty"`
 
 	// Tagging and classification
 	ControlTags              []string `json:"control_tags,omitempty"`
@@ -141,9 +126,6 @@ type Control struct {
 	// Common control mapping (for Unified Control View)
 	CommonControlMappings []string `json:"common_control_mappings,omitempty"`
 
-	// Custom fields
-	CustomFields []CustomField `json:"control_custom_fields,omitempty"`
-
 	// Metadata
 	LastEditTime string `json:"control_last_edit_time,omitempty"`
 }
@@ -153,22 +135,6 @@ type LinkedRequirement struct {
 	RequirementID   string `json:"requirement_id"`
 	RequirementName string `json:"requirement_name,omitempty"`
 }
-
-// CustomField represents a custom field attached to a control or requirement
-type CustomField struct {
-	FieldName  string          `json:"field_name"`
-	FieldType  CustomFieldType `json:"field_type"`
-	FieldValue interface{}     `json:"field_value"`
-}
-
-// CustomFieldType represents the type of custom field
-type CustomFieldType string
-
-const (
-	CustomFieldTypeText      CustomFieldType = "text"
-	CustomFieldTypeDropdown  CustomFieldType = "dropdown"
-	CustomFieldTypeTagsGroup CustomFieldType = "tags_group"
-)
 
 // MaturityLevel represents the valid control maturity levels (matches the
 // platform MaturityLevel enum).
@@ -245,6 +211,39 @@ func ValidAuditorEvidenceStatuses() []string {
 	}
 }
 
+// ValidRequirementCategories returns the requirement categories Anecdotes
+// defines. New requirements must use one of these values.
+func ValidRequirementCategories() []string {
+	return []string{
+		"AI Specific",
+		"Access",
+		"Backup",
+		"CIS AWS Benchmarks specific",
+		"Cardholder Data Environment",
+		"Custom Requirements",
+		"Documentation",
+		"Encryption",
+		"FedRAMP specific",
+		"Human Resources",
+		"IRAP specific",
+		"ISMS",
+		"IT & Network",
+		"Incident Response & Support",
+		"Infrastructure",
+		"Logging & Monitoring",
+		"Organization",
+		"Physical",
+		"Privacy",
+		"Processing Integrity",
+		"SDLC & Change management",
+		"SSPA specific",
+		"Security",
+		"Training",
+		"Vendors & Customers",
+		"Vulnerabilities",
+	}
+}
+
 // Requirement represents a compliance requirement in the Requirements Hub
 type Requirement struct {
 	RequirementID            string   `json:"requirement_id"`
@@ -285,14 +284,14 @@ type ControlRequirementLink struct {
 // SetFrameworkAuditorControlStatus / SetFrameworkAuditorEvidenceStatus.
 type FrameworkCreateRequest struct {
 	FrameworkName        string `json:"framework_name"`
-	FrameworkDescription string `json:"framework_description,omitempty"`
+	FrameworkDescription string `json:"framework_description"`
 	FolderID             string `json:"folder_id,omitempty"`
 }
 
 // FrameworkUpdateRequest represents the request body for updating a framework
 type FrameworkUpdateRequest struct {
 	FrameworkName        string `json:"framework_name,omitempty"`
-	FrameworkDescription string `json:"framework_description,omitempty"`
+	FrameworkDescription string `json:"framework_description"`
 
 	// The visibility status sets use dedicated endpoints, not this body.
 	// framework_auditable is platform-managed and cannot be set here.
@@ -328,7 +327,7 @@ type ControlCreateRequest struct {
 	ControlDescription         string            `json:"control_description,omitempty"`
 	ControlFrameworkCategory   string            `json:"control_framework_category"`
 	ControlFrameworkCategoryID string            `json:"control_framework_category_id,omitempty"`
-	ControlOwners              []string          `json:"control_owners,omitempty"`
+	ControlOwners              []string          `json:"control_owner,omitempty"`
 	ControlTags                []string          `json:"control_tags,omitempty"`
 	CommonControlMappings      []string          `json:"common_control_mappings,omitempty"`
 	CustomTextFields           map[string]string `json:"custom_text_fields,omitempty"`
@@ -339,10 +338,9 @@ type ControlCreateRequest struct {
 // ControlUpdateRequest represents the request body for updating a control
 type ControlUpdateRequest struct {
 	ControlName                string            `json:"control_name,omitempty"`
-	ControlDescription         string            `json:"control_description,omitempty"`
+	ControlDescription         string            `json:"control_description"`
 	ControlFrameworkCategory   string            `json:"control_framework_category,omitempty"`
 	ControlFrameworkCategoryID string            `json:"control_framework_category_id,omitempty"`
-	ControlOwners              []string          `json:"control_owners,omitempty"`
 	ControlTags                []string          `json:"control_tags,omitempty"`
 	CommonControlMappings      []string          `json:"common_control_mappings,omitempty"`
 	CustomTextFields           map[string]string `json:"custom_text_fields,omitempty"`
@@ -364,10 +362,11 @@ type RequirementCreateRequest struct {
 // NOTE: The API expects this wrapped in {"requirement": {...}} — see UpdateRequirement in client.go.
 type RequirementUpdateRequest struct {
 	RequirementDescription string `json:"requirement_description,omitempty"`
-	RequirementHelp        string `json:"requirement_help,omitempty"`
-	RequirementCategory    string `json:"requirement_category,omitempty"`
-	// Pointer distinguishes "leave unchanged" (nil) from "replace with this
-	// list" (&slice) — an empty replacement list must still be serialized.
+	// Pointers distinguish "leave unchanged" (nil) from "replace with this
+	// value", so a partial update does not overwrite fields it did not set.
+	RequirementHelp     *string `json:"requirement_help,omitempty"`
+	RequirementCategory string  `json:"requirement_category,omitempty"`
+
 	RequirementOwners            *[]string              `json:"requirement_owners,omitempty"`
 	RequirementRelatedControls   []string               `json:"requirement_related_controls,omitempty"`
 	RequirementRelatedFrameworks []string               `json:"requirement_related_frameworks,omitempty"`

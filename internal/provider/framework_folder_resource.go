@@ -8,11 +8,13 @@ import (
 	"fmt"
 
 	"github.com/hashicorp/go-uuid"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 
@@ -57,6 +59,9 @@ func (r *FrameworkFolderResource) Schema(ctx context.Context, req resource.Schem
 			"name": schema.StringAttribute{
 				Required:            true,
 				MarkdownDescription: "The name of the folder.",
+				Validators: []validator.String{
+					stringvalidator.LengthBetween(1, 255),
+				},
 			},
 		},
 	}
@@ -192,7 +197,7 @@ func (r *FrameworkFolderResource) Delete(ctx context.Context, req resource.Delet
 	}
 
 	err := r.client.DeleteFolder(state.FolderID.ValueString())
-	if err != nil {
+	if err != nil && !client.IsNotFound(err) {
 		addClientError(&resp.Diagnostics, "delete folder", err)
 		return
 	}

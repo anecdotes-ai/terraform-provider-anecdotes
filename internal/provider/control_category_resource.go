@@ -181,7 +181,7 @@ func (r *ControlCategoryResource) Delete(ctx context.Context, req resource.Delet
 	}
 
 	err := r.client.DeleteControlCategory(data.CategoryID.ValueString())
-	if err != nil {
+	if err != nil && !client.IsNotFound(err) {
 		addClientError(&resp.Diagnostics, "delete control category", err)
 		return
 	}

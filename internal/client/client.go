@@ -23,6 +23,32 @@ type AnecdotesClient struct {
 	token      string
 	tokenExp   time.Time
 	mu         sync.RWMutex
+
+	// Serializes updates that rewrite a parent object's list.
+	parentLocks keyedMutex
+}
+
+// keyedMutex provides one mutex per key, created on first use.
+type keyedMutex struct {
+	mu    sync.Mutex
+	locks map[string]*sync.Mutex
+}
+
+// lock acquires the mutex for key and returns its unlock function.
+func (k *keyedMutex) lock(key string) func() {
+	k.mu.Lock()
+	if k.locks == nil {
+		k.locks = make(map[string]*sync.Mutex)
+	}
+	m, ok := k.locks[key]
+	if !ok {
+		m = &sync.Mutex{}
+		k.locks[key] = m
+	}
+	k.mu.Unlock()
+
+	m.Lock()
+	return m.Unlock
 }
 
 // NewAnecdotesClient creates a new Anecdotes API client
@@ -325,18 +351,14 @@ func (c *AnecdotesClient) GetFramework(frameworkID string) (*Framework, error) {
 	return nil, fmt.Errorf("framework not found: %s: %w", frameworkID, ErrNotFound)
 }
 
-// CreateFramework creates a new custom framework.
-// NOTE: The Anecdotes API may return HTTP 500 while still successfully creating
-// the framework. When the POST returns 500, we fall back to listing all
-// frameworks and matching by name to recover the created resource.
+// CreateFramework creates a new custom framework. When the create call returns
+// a server error, the framework is resolved by name; a conflict is returned to
+// the caller so an existing framework is never adopted.
 func (c *AnecdotesClient) CreateFramework(framework *FrameworkCreateRequest) (*Framework, error) {
 	respBody, err := c.doRequest("POST", "/api/v1/framework", framework)
 	if err != nil {
-		// The API sometimes returns 500 even though the framework WAS created.
-		// Only in that ambiguous case, recover our own creation by name. An
-		// explicit "already exists" conflict is NOT recovered: the framework
-		// predates this create, and adopting it would take ownership of an
-		// object Terraform did not create (use `terraform import` instead).
+		// A conflict is returned as-is: adopting a framework that predates this
+		// create would take ownership of an object Terraform did not create.
 		if IsServerError(err) {
 			if existing, lErr := c.getFrameworkByName(framework.FrameworkName); lErr == nil && existing != nil {
 				return existing, nil
@@ -345,13 +367,10 @@ func (c *AnecdotesClient) CreateFramework(framework *FrameworkCreateRequest) (*F
 		return nil, err
 	}
 
-	// The API returns just the framework ID as a string
 	var frameworkID string
 	if err := json.Unmarshal(respBody, &frameworkID); err != nil {
-		// Try parsing as full Framework object as fallback
 		var result Framework
 		if err2 := json.Unmarshal(respBody, &result); err2 != nil {
-			// Last resort: find by name
 			return c.getFrameworkByName(framework.FrameworkName)
 		}
 		return &result, nil
@@ -361,9 +380,8 @@ func (c *AnecdotesClient) CreateFramework(framework *FrameworkCreateRequest) (*F
 	return c.GetFramework(frameworkID)
 }
 
-// getFrameworkByName finds a framework by its name. Used only to recover our
-// own creation when the create call succeeded ambiguously (a 5xx that still
-// created the framework, or a success response in an unexpected shape).
+// getFrameworkByName finds a framework by its name. Used to resolve a framework
+// this client created when the create response cannot be used directly.
 func (c *AnecdotesClient) getFrameworkByName(name string) (*Framework, error) {
 	frameworks, err := c.ListFrameworks()
 	if err != nil {
@@ -432,11 +450,10 @@ func (c *AnecdotesClient) ListControlCategories() ([]ControlCategory, error) {
 	return categories, nil
 }
 
-// CreateControlCategory creates a new control category.
-// NOTE: The API may return HTTP 500 even though the category WAS created.
-// Only in that ambiguous case, recover our own creation by name within the
-// same framework. An explicit "already exists" conflict is NOT recovered:
-// the category predates this create (use `terraform import` instead).
+// CreateControlCategory creates a new control category. When the create call
+// returns a server error, the category is resolved by name within the same
+// framework; a conflict is returned to the caller so an existing category is
+// never adopted (use `terraform import` for that).
 func (c *AnecdotesClient) CreateControlCategory(category *ControlCategoryCreateRequest) (*ControlCategory, error) {
 	respBody, err := c.doRequest("POST", "/api/v1/framework/category", category)
 	if err != nil {
@@ -635,13 +652,36 @@ func (c *AnecdotesClient) ImportControls(frameworkID string, controls []ControlI
 	return err
 }
 
+// SetControlOwners replaces a control's owners. An empty slice clears them.
+func (c *AnecdotesClient) SetControlOwners(controlID string, owners []string) error {
+	if owners == nil {
+		owners = []string{}
+	}
+
+	body := []map[string]interface{}{
+		{
+			"control_id":    controlID,
+			"control_owner": owners,
+		},
+	}
+
+	_, err := c.doRequest("PATCH", "/controls/controls", body)
+	return err
+}
+
 // SetControlMaturityLevel sets the maturity level for one or more controls
+// An empty level clears the control's maturity level.
 func (c *AnecdotesClient) SetControlMaturityLevel(controlID, maturityLevel string) error {
+	var level interface{}
+	if maturityLevel != "" {
+		level = maturityLevel
+	}
+
 	body := map[string]interface{}{
 		"controls": []map[string]interface{}{
 			{
 				"control_id":     controlID,
-				"maturity_level": maturityLevel,
+				"maturity_level": level,
 			},
 		},
 	}
@@ -700,40 +740,39 @@ func (c *AnecdotesClient) ListRequirements() ([]Requirement, error) {
 	return requirements, nil
 }
 
-// CreateRequirement creates a new requirement in the Requirements Hub
-func (c *AnecdotesClient) CreateRequirement(requirement *RequirementCreateRequest) (*Requirement, error) {
+// CreateRequirement creates a new requirement in the Requirements Hub. The
+// second return value reports whether the requirement was resolved by name
+// after a server error rather than read back from the create call.
+func (c *AnecdotesClient) CreateRequirement(requirement *RequirementCreateRequest) (*Requirement, bool, error) {
 	respBody, err := c.doRequest("POST", "/api/v1/requirement", requirement)
 	if err != nil {
-		// The API can error ambiguously (5xx) even though the requirement WAS
-		// created. Only in that case, recover our own creation by name. An
-		// explicit "already exists" conflict is NOT recovered: the requirement
-		// predates this create, and adopting it would take ownership of an
-		// object Terraform did not create (use `terraform import` instead).
+		// A conflict is returned as-is: adopting a requirement that predates this
+		// create would take ownership of an object Terraform did not create.
 		if IsServerError(err) {
 			existing, lErr := c.getRequirementByName(requirement.RequirementDescription)
 			if lErr == nil && existing != nil {
-				return existing, nil
+				return existing, true, nil
 			}
 		}
-		return nil, err
+		return nil, false, err
 	}
 
-	// API may return just the ID as a string
 	var requirementID string
 	if err := json.Unmarshal(respBody, &requirementID); err == nil && requirementID != "" {
-		return c.GetRequirement(requirementID)
+		created, err := c.GetRequirement(requirementID)
+		return created, false, err
 	}
 
-	// Try parsing as full Requirement object
 	var result Requirement
 	if err := json.Unmarshal(respBody, &result); err != nil {
-		return nil, fmt.Errorf("failed to parse create requirement response: %w", err)
+		return nil, false, fmt.Errorf("failed to parse create requirement response: %w", err)
 	}
 
-	return &result, nil
+	return &result, false, nil
 }
 
-// getRequirementByName finds a requirement by its description/name (used as fallback when create fails due to duplicate).
+// getRequirementByName finds a requirement by its description/name. Used to
+// resolve a requirement this client created when the create call returned an error.
 func (c *AnecdotesClient) getRequirementByName(name string) (*Requirement, error) {
 	requirements, err := c.ListRequirements()
 	if err != nil {
@@ -847,6 +886,8 @@ func (c *AnecdotesClient) resolveRequirementStatusNames(reqs []*Requirement) {
 // LinkRequirementToControl links a requirement to a control using read-modify-write
 // via PATCH /controls/controls (the dedicated link endpoint returns 404).
 func (c *AnecdotesClient) LinkRequirementToControl(controlID, requirementID string) (*ControlRequirementLink, error) {
+	defer c.parentLocks.lock("control:" + controlID)()
+
 	// Read current control to get existing requirement IDs
 	control, err := c.GetControl("", controlID)
 	if err != nil {
@@ -880,14 +921,15 @@ func (c *AnecdotesClient) LinkRequirementToControl(controlID, requirementID stri
 // UnlinkRequirementFromControl removes a requirement link from a control using
 // read-modify-write via PATCH /controls/controls.
 func (c *AnecdotesClient) UnlinkRequirementFromControl(controlID, requirementID string) error {
+	defer c.parentLocks.lock("control:" + controlID)()
+
 	// Read current control to get existing requirement IDs
 	control, err := c.GetControl("", controlID)
 	if err != nil {
 		return fmt.Errorf("failed to read control %s: %w", controlID, err)
 	}
 
-	// Filter out the requirement to unlink
-	var updatedIDs []string
+	updatedIDs := make([]string, 0, len(control.RequirementIDs))
 	for _, rid := range control.RequirementIDs {
 		if rid != requirementID {
 			updatedIDs = append(updatedIDs, rid)
@@ -1018,6 +1060,34 @@ func (c *AnecdotesClient) DeleteFolder(folderID string) error {
 	return err
 }
 
+// FindFrameworkFolder returns the ID of the folder containing the framework,
+// or "" when the framework is not in any folder.
+func (c *AnecdotesClient) FindFrameworkFolder(frameworkID string) (string, error) {
+	folders, err := c.ListFolders()
+	if err != nil {
+		return "", err
+	}
+	for _, folder := range folders {
+		for _, id := range folder.FrameworksList {
+			if id == frameworkID {
+				return folder.ID, nil
+			}
+		}
+	}
+	return "", nil
+}
+
+// MoveFrameworkFolder moves a framework between folders. Both folder IDs must
+// reference existing folders.
+func (c *AnecdotesClient) MoveFrameworkFolder(frameworkID, fromFolderID, toFolderID string) error {
+	body := map[string]string{
+		"remove_from_folder_id": fromFolderID,
+		"add_to_folder_id":      toFolderID,
+	}
+	_, err := c.doRequest("PUT", "/frameworks/v1/folders/framework/"+frameworkID, body)
+	return err
+}
+
 // ListEvidences returns all evidences in the account.
 // GET /evidence/v1/evidence returns a flat JSON array of Evidence objects.
 func (c *AnecdotesClient) ListEvidences() ([]Evidence, error) {
@@ -1129,6 +1199,8 @@ func (c *AnecdotesClient) CreateEvidenceFile(evidenceName string, fileData []byt
 // Uses read-modify-write: reads current list, appends if missing, PATCHes back.
 // The API uses `requirement_related_evidences` for write and `requirement_evidence_ids` for read.
 func (c *AnecdotesClient) LinkEvidenceToRequirement(requirementID, evidenceID string) error {
+	defer c.parentLocks.lock("requirement:" + requirementID)()
+
 	req, err := c.GetRequirement(requirementID)
 	if err != nil {
 		return fmt.Errorf("failed to read requirement %s: %w", requirementID, err)
@@ -1153,6 +1225,8 @@ func (c *AnecdotesClient) LinkEvidenceToRequirement(requirementID, evidenceID st
 
 // UnlinkEvidenceFromRequirement removes an evidence ID from a requirement's evidence list.
 func (c *AnecdotesClient) UnlinkEvidenceFromRequirement(requirementID, evidenceID string) error {
+	defer c.parentLocks.lock("requirement:" + requirementID)()
+
 	req, err := c.GetRequirement(requirementID)
 	if err != nil {
 		return fmt.Errorf("failed to read requirement %s: %w", requirementID, err)
@@ -1223,13 +1297,6 @@ func (c *AnecdotesClient) GetEvidenceFullData(instanceID string) (map[string]int
 // GetControlMaturityLevel reads the maturity level from a control.
 // Note: SetControlMaturityLevel already exists above (line ~449).
 func (c *AnecdotesClient) GetControlMaturityLevel(controlID string) (string, error) {
-	control, err := c.GetControl("", controlID)
-	if err != nil {
-		return "", err
-	}
-
-	// Maturity level is stored in the control's custom fields or a dedicated field
-	// Check for maturity_level in the raw response
 	respBody, err := c.doRequest("POST", "/controls/control/read", map[string][]string{
 		"controls_ids": {controlID},
 	})
@@ -1247,10 +1314,20 @@ func (c *AnecdotesClient) GetControlMaturityLevel(controlID string) (string, err
 	}
 
 	if ml, ok := rawResults[0]["maturity_level"]; ok && ml != nil {
-		return fmt.Sprintf("%v", ml), nil
+		return normalizeMaturityLevel(fmt.Sprintf("%v", ml)), nil
 	}
 
-	// Fall back: control has no maturity level set
-	_ = control
 	return "", nil
+}
+
+// normalizeMaturityLevel returns raw as one of the valid maturity levels, or
+// "" when it is not one of them.
+func normalizeMaturityLevel(raw string) string {
+	upper := strings.ToUpper(strings.TrimSpace(raw))
+	for _, l := range ValidMaturityLevels() {
+		if upper == l {
+			return l
+		}
+	}
+	return ""
 }

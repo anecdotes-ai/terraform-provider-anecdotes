@@ -46,6 +46,12 @@ TF_ACC=1 go test -v -timeout 120m ./internal/provider/
 
 > **Tip**: Always run targeted tests during development.
 
+### Continuous integration
+
+Pull requests run the build, vet, unit tests, lint and the documentation
+check. Acceptance tests are not part of that job — run the full suite locally
+before a release.
+
 ---
 
 ## Test Coverage

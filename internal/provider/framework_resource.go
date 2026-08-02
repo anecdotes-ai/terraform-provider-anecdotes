@@ -16,7 +16,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -97,20 +96,19 @@ Framework (this resource)
 			},
 
 			"description": schema.StringAttribute{
-				Description: "A detailed description of the framework and its purpose.",
-				Optional:    true,
-				Computed:    true,
-				Default:     stringdefault.StaticString(""),
+				Description: "A detailed description of the framework and its purpose. The platform requires a non-empty description.",
+				Required:    true,
+				Validators: []validator.String{
+					stringvalidator.LengthAtLeast(1),
+				},
 			},
 
 			"folder_id": schema.StringAttribute{
-				Description:         "The ID of the folder where this framework will be placed. Optional for import.",
-				MarkdownDescription: "The ID of the folder where this framework will be placed. Optional for import.",
-				Optional:            true,
-				Computed:            true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(), // Changing folder requires recreating the framework
-					stringplanmodifier.UseStateForUnknown(),
+				Description:         "The ID of the folder this framework is placed in. Changing it moves the framework to the new folder.",
+				MarkdownDescription: "The ID of the folder this framework is placed in. Changing it moves the framework to the new folder. Use `anecdotes_framework_folder` to create folders.",
+				Required:            true,
+				Validators: []validator.String{
+					stringvalidator.LengthAtLeast(1),
 				},
 			},
 
@@ -277,11 +275,19 @@ func (r *FrameworkResource) Read(ctx context.Context, req resource.ReadRequest, 
 }
 
 func (r *FrameworkResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	var data FrameworkResourceModel
+	var data, state FrameworkResourceModel
 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
+	}
+
+	if data.FolderID.ValueString() != state.FolderID.ValueString() {
+		r.moveFrameworkFolder(data.FrameworkID.ValueString(), data.FolderID.ValueString(), &resp.Diagnostics)
+		if resp.Diagnostics.HasError() {
+			return
+		}
 	}
 
 	r.configureFrameworkAuditing(ctx, data.FrameworkID.ValueString(), &data, &resp.Diagnostics)
@@ -303,6 +309,18 @@ func (r *FrameworkResource) Update(ctx context.Context, req resource.UpdateReque
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+}
+
+// moveFrameworkFolder moves the framework to toFolderID. The current folder is
+// resolved from the folders list, falling back to the destination.
+func (r *FrameworkResource) moveFrameworkFolder(frameworkID, toFolderID string, diags *diag.Diagnostics) {
+	fromFolderID := toFolderID
+	if found, err := r.client.FindFrameworkFolder(frameworkID); err == nil && found != "" {
+		fromFolderID = found
+	}
+	if err := r.client.MoveFrameworkFolder(frameworkID, fromFolderID, toFolderID); err != nil {
+		addClientError(diags, "move framework to folder", err)
+	}
 }
 
 // configureFrameworkAuditing applies the base fields and auditor booleans via
@@ -355,7 +373,7 @@ func (r *FrameworkResource) Delete(ctx context.Context, req resource.DeleteReque
 	}
 
 	err := r.client.DeleteFramework(data.FrameworkID.ValueString())
-	if err != nil {
+	if err != nil && !client.IsNotFound(err) {
 		addClientError(&resp.Diagnostics, "delete framework", err)
 		return
 	}
@@ -371,14 +389,8 @@ func (r *FrameworkResource) setFrameworkState(ctx context.Context, data *Framewo
 	data.Name = types.StringValue(framework.FrameworkName)
 	data.Description = types.StringValue(framework.FrameworkDescription)
 
-	// folder_id: API GET does not return this field reliably.
-	// Preserve the plan/state value when the API response is empty.
-	if framework.FolderID != "" {
-		data.FolderID = types.StringValue(framework.FolderID)
-	} else if data.FolderID.IsUnknown() {
-		// Create without a configured folder and no API echo: record "no
-		// folder" — a Computed attribute must not remain unknown after apply.
-		data.FolderID = types.StringNull()
+	if folderID, err := r.client.FindFrameworkFolder(framework.FrameworkID); err == nil && folderID != "" {
+		data.FolderID = types.StringValue(folderID)
 	}
 
 	// framework_auditable is platform-managed (read-only) — always from the API.
