@@ -146,3 +146,26 @@ resource "anecdotes_framework" "test" {
 		})
 	}
 }
+
+// The environment variable never reaches schema validation, so the resolved URL
+// is checked while the provider is configured. This covers that wiring — the
+// validator alone would leave the environment path open, which is how the
+// credential would have leaked.
+func TestAccValidation_RejectsPlaintextAPIURLFromEnvironment(t *testing.T) {
+	t.Setenv("ANECDOTES_API_URL", "http://api.anecdotes.ai")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: `
+resource "anecdotes_framework_folder" "never_created" {
+  name = "tf-test-plaintext-url-guard"
+}`,
+				PlanOnly:    true,
+				ExpectError: regexp.MustCompile(`(?s)Insecure API URL.*clear text`),
+			},
+		},
+	})
+}

@@ -31,6 +31,9 @@ compliance surface of the Anecdotes GRC platform.
 - Provider configuration with `api_key` and `api_url` attributes, backed by the
   `ANECDOTES_API_KEY` and `ANECDOTES_API_URL` environment variables. The API key
   is exchanged for a short-lived bearer token that is refreshed automatically.
+  The base URL must use `https` — plain `http` is accepted only for localhost, so
+  a long-lived credential is never sent in clear text — and the provider does not
+  follow redirects, so it cannot be forwarded to another host.
 - Resources:
   - `anecdotes_framework`
   - `anecdotes_framework_folder`
