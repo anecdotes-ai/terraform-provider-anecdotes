@@ -215,6 +215,56 @@ func TestLinkEvidenceToRequirement_DoesNotSendOtherFields(t *testing.T) {
 	}
 }
 
+// A delete that removed nothing must not be reported as success — but a
+// requirement that was already gone still counts as deleted.
+func TestDeleteRequirement_VerifiesTheOutcome(t *testing.T) {
+	cases := []struct {
+		name        string
+		body        string
+		stillExists bool
+		wantErr     bool
+	}{
+		{"removed", `{"deleted_count":1}`, false, false},
+		{"already gone", `{"deleted_count":0}`, false, false},
+		{"refused — requirement still there", `{"deleted_count":0}`, true, true},
+		// An unreadable response is not evidence of success either: the outcome
+		// is decided by reading the requirement back.
+		{"unparseable body, requirement gone", `not json`, false, false},
+		{"unparseable body, requirement still there", `not json`, true, true},
+		{"empty body, requirement still there", ``, true, true},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch {
+				case strings.HasSuffix(r.URL.Path, "/apikey/exchange"):
+					_, _ = w.Write([]byte("test-token"))
+				case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/requirement/delete"):
+					_, _ = w.Write([]byte(c.body))
+				case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/requirement/"):
+					if c.stillExists {
+						_, _ = w.Write([]byte(`[{"requirement_id":"r1","requirement_name":"R"}]`))
+						return
+					}
+					w.WriteHeader(http.StatusNotFound)
+				default:
+					_, _ = w.Write([]byte(`{}`))
+				}
+			}))
+			defer srv.Close()
+
+			err := newTestClient(t, srv).DeleteRequirement("r1")
+			if c.wantErr && err == nil {
+				t.Error("expected an error when the requirement survived the delete, got none")
+			}
+			if !c.wantErr && err != nil {
+				t.Errorf("expected success, got %v", err)
+			}
+		})
+	}
+}
+
 func stringPtr(s string) *string { return &s }
 
 func keysOf(m map[string]interface{}) []string {

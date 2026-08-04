@@ -800,12 +800,35 @@ func (c *AnecdotesClient) UpdateRequirement(requirementID string, requirement *R
 	return c.GetRequirement(requirementID)
 }
 
-// DeleteRequirement deletes a requirement via POST /api/v1/requirement/delete.
-// DELETE /api/v1/requirement/{id} returns 405; the FE uses this POST endpoint instead.
+// DeleteRequirement deletes a requirement. The response reports how many
+// requirements were removed; zero means the requirement was either already gone
+// or could not be removed, so which one is confirmed by reading it back rather
+// than reporting a success that did not happen.
 func (c *AnecdotesClient) DeleteRequirement(requirementID string) error {
-	body := []string{requirementID}
-	_, err := c.doRequest("POST", "/api/v1/requirement/delete", body)
-	return err
+	respBody, err := c.doRequest("POST", "/api/v1/requirement/delete", []string{requirementID})
+	if err != nil {
+		return err
+	}
+
+	// A response that cannot be parsed is not evidence of anything, so it falls
+	// through to the read-back rather than counting as success.
+	var result struct {
+		DeletedCount int `json:"deleted_count"`
+	}
+	if err := json.Unmarshal(respBody, &result); err == nil && result.DeletedCount > 0 {
+		return nil
+	}
+
+	_, err = c.GetRequirement(requirementID)
+	if IsNotFound(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("could not confirm requirement %s was deleted: %w", requirementID, err)
+	}
+	return fmt.Errorf("requirement %s still exists after the delete call: requirements provided by the "+
+		"Anecdotes platform cannot be deleted, only custom ones. Remove it from state with "+
+		"`terraform state rm` if Terraform should stop managing it", requirementID)
 }
 
 // ListRequirementStatuses fetches the available requirement status options.
