@@ -4,9 +4,15 @@
 package provider
 
 import (
+	"context"
 	"fmt"
+	"os"
 	"testing"
 
+	"github.com/anecdotes-ai/terraform-provider-anecdotes/internal/client"
+	"github.com/hashicorp/go-uuid"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/defaults"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 )
@@ -210,4 +216,83 @@ resource "anecdotes_framework" "test" {
 			},
 		},
 	})
+}
+
+// TestAccFrameworkAuditorDefaults_MatchThePlatform creates a framework straight
+// through the API, without the auditor booleans the provider would send, and
+// compares what the platform chose against the provider's own defaults. If they
+// ever diverge, the provider's default silently becomes an override of the
+// platform's rather than an echo of it, and every framework Terraform creates
+// gets a different auditor posture from one created in the application.
+func TestAccFrameworkAuditorDefaults_MatchThePlatform(t *testing.T) {
+	if os.Getenv("TF_ACC") == "" {
+		t.Skip("acceptance test — set TF_ACC=1 to run")
+	}
+	testAccPreCheck(t)
+
+	c := testAccNewClient(t)
+
+	folderID, err := uuid.GenerateUUID()
+	if err != nil {
+		t.Fatalf("generating a folder id: %v", err)
+	}
+	folder, err := c.CreateFolder(&client.FolderCreateRequest{
+		ID:             folderID,
+		Name:           randomName("folder-auditor-defaults"),
+		FrameworksList: []string{},
+	})
+	if err != nil {
+		t.Fatalf("creating a folder: %v", err)
+	}
+
+	framework, err := c.CreateFramework(&client.FrameworkCreateRequest{
+		FrameworkName:        randomName("fw-auditor-defaults"),
+		FrameworkDescription: "Auditor default comparison",
+		FolderID:             folder.ID,
+	})
+	if err != nil {
+		t.Fatalf("creating a framework: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := c.DeleteFramework(framework.FrameworkID); err != nil {
+			t.Errorf("cleanup: deleting framework %s: %v", framework.FrameworkID, err)
+		}
+		if err := c.DeleteFolder(folder.ID); err != nil {
+			t.Errorf("cleanup: deleting folder %s: %v", folder.ID, err)
+		}
+	})
+
+	schema := mustSchema(NewFrameworkResource())
+	for _, tc := range []struct {
+		attribute string
+		platform  bool
+	}{
+		{"can_auditor_download_evidence", framework.CanAuditorDownloadEvidence},
+		{"can_auditor_view_control_attachments", framework.CanAuditorViewControlAttachments},
+		{"can_auditor_view_control_custom_fields", framework.CanAuditorViewControlCustomFields},
+		{"can_auditor_view_soa_report", framework.CanAuditorViewSoaReport},
+		{"can_auditor_view_tags", framework.CanAuditorViewTags},
+	} {
+		want := schemaBoolDefault(t, schema, tc.attribute)
+		if tc.platform != want {
+			t.Errorf("%s: the platform defaults to %t but the provider defaults to %t — the provider's value is now an override, not an echo",
+				tc.attribute, tc.platform, want)
+		}
+	}
+}
+
+// schemaBoolDefault reads a boolean attribute's default straight off the schema,
+// so this comparison tracks the schema instead of a copy of it.
+func schemaBoolDefault(t *testing.T, s schema.Schema, name string) bool {
+	t.Helper()
+	attribute, ok := s.Attributes[name].(schema.BoolAttribute)
+	if !ok {
+		t.Fatalf("%s is not a bool attribute", name)
+	}
+	if attribute.Default == nil {
+		t.Fatalf("%s has no default", name)
+	}
+	var resp defaults.BoolResponse
+	attribute.Default.DefaultBool(context.Background(), defaults.BoolRequest{}, &resp)
+	return resp.PlanValue.ValueBool()
 }
