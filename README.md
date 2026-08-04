@@ -38,12 +38,18 @@ export ANECDOTES_API_KEY="your-api-key-here"
 
 > **Authentication & secrets**
 > - **Prefer the `ANECDOTES_API_KEY` environment variable** over hardcoding `api_key` in `.tf` files.
-> - The `api_key` attribute is marked `Sensitive`, so it is redacted from plan/apply output — but it is still stored in state, so treat your state backend as sensitive.
+> - The `api_key` attribute is marked `Sensitive`, so it is redacted from plan and apply output. Provider configuration is not written to state, but a sensitive value taken from a variable is recorded in the **plan file** — treat saved plans as secrets.
+> - **Protect your state backend** for a different reason: the data sources write what they read into state. `anecdotes_evidences` in particular records your evidence inventory — names, URLs and service identifiers — for every match. Use an encrypted backend with access control.
 > - **Never commit API keys, tokens, or `*.tfvars` files** containing secrets. This repository's `.gitignore` excludes `.env`, `*.env`, and `*.tfvars`.
 > - Each user supplies **their own** API key; keys are not bundled with the provider.
 > - The provider authenticates when it is configured, so `terraform plan` and
 >   `terraform apply` need network access and valid credentials even for no-op
 >   plans. `terraform validate` works offline.
+
+The API base URL must use `https` — the API key is sent on the first request of every
+session, so a plaintext URL would put a long-lived credential on the wire. Plain `http` is
+accepted only for `localhost`, for use with a local mock. The provider also refuses to
+follow redirects, so a credential cannot be forwarded to another host.
 
 The API base URL defaults to `https://api.anecdotes.ai` and can be overridden with
 the `api_url` attribute or the `ANECDOTES_API_URL` environment variable.
