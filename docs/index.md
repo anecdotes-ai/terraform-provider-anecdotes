@@ -94,4 +94,4 @@ provider "anecdotes" {
 ### Optional
 
 - `api_key` (String, Sensitive) The Anecdotes API key for authentication. Can also be set via `ANECDOTES_API_KEY` environment variable.
-- `api_url` (String) The Anecdotes API base URL. Must use `https`. Defaults to `https://api.anecdotes.ai`. Can also be set via the `ANECDOTES_API_URL` environment variable.
+- `api_url` (String) The Anecdotes API base URL. Must use `https`; plain `http` is accepted only for `localhost` (for use with a local mock). Defaults to `https://api.anecdotes.ai`. Can also be set via the `ANECDOTES_API_URL` environment variable.

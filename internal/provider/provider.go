@@ -96,8 +96,8 @@ Example usage is generated from ` + "`examples/provider/provider.tf`" + `.
 				Sensitive:           true,
 			},
 			"api_url": schema.StringAttribute{
-				Description:         "The Anecdotes API base URL. Must use https. Defaults to https://api.anecdotes.ai. Can also be set via ANECDOTES_API_URL environment variable.",
-				MarkdownDescription: "The Anecdotes API base URL. Must use `https`. Defaults to `https://api.anecdotes.ai`. Can also be set via the `ANECDOTES_API_URL` environment variable.",
+				Description:         "The Anecdotes API base URL. Must use https; plain http is accepted only for localhost (for use with a local mock). Defaults to https://api.anecdotes.ai. Can also be set via ANECDOTES_API_URL environment variable.",
+				MarkdownDescription: "The Anecdotes API base URL. Must use `https`; plain `http` is accepted only for `localhost` (for use with a local mock). Defaults to `https://api.anecdotes.ai`. Can also be set via the `ANECDOTES_API_URL` environment variable.",
 				Optional:            true,
 				Validators: []validator.String{
 					requireHTTPSURL(),

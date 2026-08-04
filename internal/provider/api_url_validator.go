@@ -23,11 +23,11 @@ func requireHTTPSURL() validator.String {
 }
 
 func (v httpsURLValidator) Description(ctx context.Context) string {
-	return "must be an https URL, or an http URL on localhost"
+	return "must be an https URL, or an http URL on localhost (for use with a local mock)"
 }
 
 func (v httpsURLValidator) MarkdownDescription(ctx context.Context) string {
-	return "must be an `https` URL, or an `http` URL on localhost"
+	return "must be an `https` URL, or an `http` URL on `localhost` (for use with a local mock)"
 }
 
 func (v httpsURLValidator) ValidateString(ctx context.Context, req validator.StringRequest, resp *validator.StringResponse) {
