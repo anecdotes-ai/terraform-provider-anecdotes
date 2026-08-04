@@ -810,10 +810,12 @@ func (c *AnecdotesClient) DeleteRequirement(requirementID string) error {
 		return err
 	}
 
+	// A response that cannot be parsed is not evidence of anything, so it falls
+	// through to the read-back rather than counting as success.
 	var result struct {
 		DeletedCount int `json:"deleted_count"`
 	}
-	if err := json.Unmarshal(respBody, &result); err != nil || result.DeletedCount > 0 {
+	if err := json.Unmarshal(respBody, &result); err == nil && result.DeletedCount > 0 {
 		return nil
 	}
 
