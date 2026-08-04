@@ -40,6 +40,15 @@ import or from existing state — fails with an error pointing at the data
 sources. Read platform-provided controls with the `anecdotes_control` or
 `anecdotes_controls` data source.
 
+## Requirements provided by the platform cannot be deleted
+
+The `anecdotes_requirement` resource manages both custom requirements and the
+requirements Anecdotes provides — setting owners or a description on a provided
+requirement works normally. Deleting one does not: only custom requirements can
+be deleted, so `terraform destroy` on a provided requirement fails with an
+explanatory error rather than reporting a success that did not happen. Remove it
+from state with `terraform state rm` if Terraform should stop managing it.
+
 ## Clearing attributes
 
 Most optional attributes are cleared by removing them from the configuration.

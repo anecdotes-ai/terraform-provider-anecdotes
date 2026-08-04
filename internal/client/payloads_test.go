@@ -5,6 +5,7 @@ package client
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -212,6 +213,51 @@ func TestLinkEvidenceToRequirement_DoesNotSendOtherFields(t *testing.T) {
 	}
 	if _, ok := payload.Requirement["requirement_related_evidences"]; !ok {
 		t.Errorf("the evidence list must be sent, got %s", patched)
+	}
+}
+
+// A delete that removed nothing must not be reported as success — but a
+// requirement that was already gone still counts as deleted.
+func TestDeleteRequirement_VerifiesTheOutcome(t *testing.T) {
+	cases := []struct {
+		name         string
+		deletedCount int
+		stillExists  bool
+		wantErr      bool
+	}{
+		{"removed", 1, false, false},
+		{"already gone", 0, false, false},
+		{"refused — requirement still there", 0, true, true},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch {
+				case strings.HasSuffix(r.URL.Path, "/apikey/exchange"):
+					_, _ = w.Write([]byte("test-token"))
+				case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/requirement/delete"):
+					_, _ = fmt.Fprintf(w, `{"deleted_count":%d}`, c.deletedCount)
+				case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/requirement/"):
+					if c.stillExists {
+						_, _ = w.Write([]byte(`[{"requirement_id":"r1","requirement_name":"R"}]`))
+						return
+					}
+					w.WriteHeader(http.StatusNotFound)
+				default:
+					_, _ = w.Write([]byte(`{}`))
+				}
+			}))
+			defer srv.Close()
+
+			err := newTestClient(t, srv).DeleteRequirement("r1")
+			if c.wantErr && err == nil {
+				t.Error("expected an error when the requirement survived the delete, got none")
+			}
+			if !c.wantErr && err != nil {
+				t.Errorf("expected success, got %v", err)
+			}
+		})
 	}
 }
 
