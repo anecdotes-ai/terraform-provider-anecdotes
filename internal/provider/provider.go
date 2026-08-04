@@ -12,6 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -95,9 +96,12 @@ Example usage is generated from ` + "`examples/provider/provider.tf`" + `.
 				Sensitive:           true,
 			},
 			"api_url": schema.StringAttribute{
-				Description:         "The Anecdotes API base URL. Defaults to https://api.anecdotes.ai. Can also be set via ANECDOTES_API_URL environment variable.",
-				MarkdownDescription: "The Anecdotes API base URL. Defaults to `https://api.anecdotes.ai`. Can also be set via `ANECDOTES_API_URL` environment variable.",
+				Description:         "The Anecdotes API base URL. Must use https. Defaults to https://api.anecdotes.ai. Can also be set via ANECDOTES_API_URL environment variable.",
+				MarkdownDescription: "The Anecdotes API base URL. Must use `https`. Defaults to `https://api.anecdotes.ai`. Can also be set via the `ANECDOTES_API_URL` environment variable.",
 				Optional:            true,
+				Validators: []validator.String{
+					requireHTTPSURL(),
+				},
 			},
 		},
 	}
@@ -134,6 +138,13 @@ func (p *AnecdotesProvider) Configure(ctx context.Context, req provider.Configur
 	}
 	if apiURL == "" {
 		apiURL = "https://api.anecdotes.ai"
+	}
+
+	// The environment variable bypasses schema validation, so the resolved URL is
+	// checked here as well.
+	if summary, detail := checkAPIURL(apiURL); summary != "" {
+		resp.Diagnostics.AddError(summary, detail)
+		return
 	}
 
 	// Create API client
