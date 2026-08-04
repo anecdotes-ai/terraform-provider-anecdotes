@@ -262,6 +262,12 @@ func TestAccFrameworkAuditorDefaults_MatchThePlatform(t *testing.T) {
 		}
 	})
 
+	// This comparison relies on the create response carrying resolved values for
+	// all five booleans, which it does. It cannot pass vacuously if that ever
+	// stops being true: two of the five defaults are `true`, so a response that
+	// omitted the auditor fields would decode them as false and fail here. A
+	// response that omitted only one of the three false-valued fields would
+	// coincide with its expected value — narrow enough to accept.
 	schema := mustSchema(NewFrameworkResource())
 	for _, tc := range []struct {
 		attribute string
