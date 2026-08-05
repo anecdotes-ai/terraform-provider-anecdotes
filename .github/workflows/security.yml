@@ -1,0 +1,44 @@
+# Copyright (c) Anecdotes AI
+# SPDX-License-Identifier: MPL-2.0
+
+name: Security
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  # A new advisory can affect an unchanged dependency, so the scan also runs on a
+  # schedule rather than only when someone opens a pull request.
+  schedule:
+    - cron: '0 6 * * 1'
+
+# Cancel superseded runs for the same PR; never cancel runs on the default branch.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  govulncheck:
+    name: govulncheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          # The Go version in go.mod also determines which standard library is
+          # scanned, and which one ships in released binaries.
+          go-version-file: go.mod
+      - name: Install govulncheck
+        # Pinned by module version: the checksum database makes a published Go
+        # module version immutable, unlike a mutable action tag.
+        run: go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
+      - name: Scan for known vulnerabilities
+        # Reports only advisories the provider's own code paths can reach.
+        run: govulncheck ./...

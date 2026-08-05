@@ -31,6 +31,10 @@ testacc:
 lint:
 	golangci-lint run
 
+.PHONY: vulncheck
+vulncheck:
+	go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
+
 .PHONY: fmt
 fmt:
 	gofmt -s -w .
