@@ -6,6 +6,7 @@ package client
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -51,6 +52,9 @@ func (k *keyedMutex) lock(key string) func() {
 	return m.Unlock
 }
 
+// errRedirectRefused marks a refused redirect. It can never succeed on retry.
+var errRedirectRefused = errors.New("redirect refused")
+
 // NewAnecdotesClient creates a new Anecdotes API client
 func NewAnecdotesClient(apiKey, apiURL string) (*AnecdotesClient, error) {
 	if apiKey == "" {
@@ -62,6 +66,13 @@ func NewAnecdotesClient(apiKey, apiURL string) (*AnecdotesClient, error) {
 		apiURL: apiURL,
 		httpClient: &http.Client{
 			Timeout: 120 * time.Second,
+			// The API key travels in a custom header, which Go forwards across
+			// hosts even though it strips Authorization. Refusing redirects keeps
+			// the credential from following one.
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				return fmt.Errorf("refusing to follow a redirect to %s: the Anecdotes API is not expected to redirect: %w",
+					req.URL.Redacted(), errRedirectRefused)
+			},
 		},
 	}
 
@@ -184,6 +195,9 @@ func (c *AnecdotesClient) doRequest(method, path string, body interface{}) ([]by
 		resp, err := c.httpClient.Do(req)
 		if err != nil {
 			lastErr = fmt.Errorf("request failed: %w", err)
+			if errors.Is(err, errRedirectRefused) {
+				return nil, lastErr
+			}
 			if attempt < maxRetries {
 				time.Sleep(time.Duration(attempt+1) * 2 * time.Second)
 				continue
