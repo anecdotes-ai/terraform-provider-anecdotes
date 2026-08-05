@@ -34,7 +34,8 @@ jobs:
         run: go vet ./...
       - name: Unit tests
         # Acceptance tests are skipped without TF_ACC; they require a live tenant.
-        run: go test ./... -parallel=4
+        # -race guards the concurrent token cache and per-parent locks in the client.
+        run: go test -race ./... -parallel=4
 
   lint:
     name: lint

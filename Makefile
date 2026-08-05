@@ -21,7 +21,7 @@ install: build
 
 .PHONY: test
 test:
-	go test -v -cover -timeout=120s -parallel=4 ./...
+	go test -race -v -cover -timeout=120s -parallel=4 ./...
 
 .PHONY: testacc
 testacc:
