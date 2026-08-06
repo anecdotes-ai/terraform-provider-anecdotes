@@ -4,6 +4,7 @@
 package provider
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"testing"
@@ -25,7 +26,7 @@ func testAccNewClient(t *testing.T) *client.AnecdotesClient {
 	if apiURL == "" {
 		apiURL = "https://api.anecdotes.ai"
 	}
-	c, err := client.NewAnecdotesClient(os.Getenv("ANECDOTES_API_KEY"), apiURL)
+	c, err := client.NewAnecdotesClient(context.Background(), os.Getenv("ANECDOTES_API_KEY"), apiURL)
 	if err != nil {
 		t.Fatalf("failed to create API client for drift test: %v", err)
 	}
@@ -77,7 +78,7 @@ resource "anecdotes_framework" "test" {
 			{
 				PreConfig: func() {
 					c := testAccNewClient(t)
-					_, err := c.UpdateFramework(frameworkID, &client.FrameworkUpdateRequest{
+					_, err := c.UpdateFramework(context.Background(), frameworkID, &client.FrameworkUpdateRequest{
 						FrameworkName:        name,
 						FrameworkDescription: "Changed outside Terraform",
 					})
@@ -141,7 +142,7 @@ resource "anecdotes_framework" "test" {
 			{
 				PreConfig: func() {
 					c := testAccNewClient(t)
-					if err := c.MoveFrameworkFolder(frameworkID, folderAID, folderBID); err != nil {
+					if err := c.MoveFrameworkFolder(context.Background(), frameworkID, folderAID, folderBID); err != nil {
 						t.Fatalf("out-of-band folder move failed: %v", err)
 					}
 				},
@@ -303,7 +304,7 @@ func testCheckRequirementOwnersEmpty(t *testing.T, resourceName string) resource
 		if err != nil {
 			return err
 		}
-		requirement, err := testAccNewClient(t).GetRequirement(id)
+		requirement, err := testAccNewClient(t).GetRequirement(context.Background(), id)
 		if err != nil {
 			return fmt.Errorf("reading requirement %s: %w", id, err)
 		}
@@ -363,11 +364,11 @@ resource "anecdotes_requirement" "test" {
 			{
 				PreConfig: func() {
 					c := testAccNewClient(t)
-					if err := c.SetControlOwners(controlID, []string{intruder}); err != nil {
+					if err := c.SetControlOwners(context.Background(), controlID, []string{intruder}); err != nil {
 						t.Fatalf("out-of-band control owners change failed: %v", err)
 					}
 					intruders := []string{intruder}
-					if _, err := c.UpdateRequirement(requirementID, &client.RequirementUpdateRequest{
+					if _, err := c.UpdateRequirement(context.Background(), requirementID, &client.RequirementUpdateRequest{
 						RequirementDescription: reqName,
 						RequirementOwners:      &intruders,
 					}); err != nil {
@@ -446,7 +447,7 @@ func testCheckControlMaturityEmpty(t *testing.T, resourceName string) resource.T
 		if err != nil {
 			return err
 		}
-		level, err := testAccNewClient(t).GetControlMaturityLevel(id)
+		level, err := testAccNewClient(t).GetControlMaturityLevel(context.Background(), id)
 		if err != nil {
 			return fmt.Errorf("reading maturity level of %s: %w", id, err)
 		}
@@ -484,7 +485,7 @@ resource "anecdotes_requirement" "test" {
 			{
 				PreConfig: func() {
 					c := testAccNewClient(t)
-					if err := c.DeleteRequirement(requirementID); err != nil {
+					if err := c.DeleteRequirement(context.Background(), requirementID); err != nil {
 						t.Fatalf("out-of-band delete failed: %v", err)
 					}
 				},

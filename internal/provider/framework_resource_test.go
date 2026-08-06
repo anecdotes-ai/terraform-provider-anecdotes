@@ -236,7 +236,7 @@ func TestAccFrameworkAuditorDefaults_MatchThePlatform(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generating a folder id: %v", err)
 	}
-	folder, err := c.CreateFolder(&client.FolderCreateRequest{
+	folder, err := c.CreateFolder(context.Background(), &client.FolderCreateRequest{
 		ID:             folderID,
 		Name:           randomName("folder-auditor-defaults"),
 		FrameworksList: []string{},
@@ -245,7 +245,7 @@ func TestAccFrameworkAuditorDefaults_MatchThePlatform(t *testing.T) {
 		t.Fatalf("creating a folder: %v", err)
 	}
 
-	framework, err := c.CreateFramework(&client.FrameworkCreateRequest{
+	framework, err := c.CreateFramework(context.Background(), &client.FrameworkCreateRequest{
 		FrameworkName:        randomName("fw-auditor-defaults"),
 		FrameworkDescription: "Auditor default comparison",
 		FolderID:             folder.ID,
@@ -254,10 +254,10 @@ func TestAccFrameworkAuditorDefaults_MatchThePlatform(t *testing.T) {
 		t.Fatalf("creating a framework: %v", err)
 	}
 	t.Cleanup(func() {
-		if err := c.DeleteFramework(framework.FrameworkID); err != nil {
+		if err := c.DeleteFramework(context.Background(), framework.FrameworkID); err != nil {
 			t.Errorf("cleanup: deleting framework %s: %v", framework.FrameworkID, err)
 		}
-		if err := c.DeleteFolder(folder.ID); err != nil {
+		if err := c.DeleteFolder(context.Background(), folder.ID); err != nil {
 			t.Errorf("cleanup: deleting folder %s: %v", folder.ID, err)
 		}
 	})

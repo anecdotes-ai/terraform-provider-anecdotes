@@ -116,7 +116,7 @@ func (d *ControlDataSource) Read(ctx context.Context, req datasource.ReadRequest
 	}
 
 	// Get control from API (GetControl takes frameworkID and controlID)
-	control, err := d.client.GetControl(data.FrameworkID.ValueString(), data.ControlID.ValueString())
+	control, err := d.client.GetControl(ctx, data.FrameworkID.ValueString(), data.ControlID.ValueString())
 	if err != nil {
 		addClientError(&resp.Diagnostics, "read control", err)
 		return

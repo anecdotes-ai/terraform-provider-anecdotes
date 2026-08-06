@@ -4,6 +4,7 @@
 package client
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -31,7 +32,7 @@ func TestAddControl_DoesNotRetryARejectedCategory(t *testing.T) {
 	c := newTestClient(t, srv)
 
 	start := time.Now()
-	_, err := c.AddControl("fw1", &ControlCreateRequest{
+	_, err := c.AddControl(context.Background(), "fw1", &ControlCreateRequest{
 		ControlName:                "c",
 		ControlFrameworkCategory:   "cat",
 		ControlFrameworkCategoryID: "category_1",
@@ -65,7 +66,7 @@ func TestAddControl_SurfacesServerErrors(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	_, err := newTestClient(t, srv).AddControl("fw1", &ControlCreateRequest{ControlName: "c"})
+	_, err := newTestClient(t, srv).AddControl(context.Background(), "fw1", &ControlCreateRequest{ControlName: "c"})
 	if err == nil {
 		t.Fatal("expected an error")
 	}

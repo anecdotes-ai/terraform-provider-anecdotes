@@ -4,6 +4,7 @@
 package client
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -79,7 +80,7 @@ func TestDoRequest_RetryAfterIsCapped(t *testing.T) {
 	c := newTestClient(t, srv)
 
 	start := time.Now()
-	if _, err := c.doRequest("GET", "/api/v1/framework", nil); err != nil {
+	if _, err := c.doRequest(context.Background(), "GET", "/api/v1/framework", nil); err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
 	elapsed := time.Since(start)

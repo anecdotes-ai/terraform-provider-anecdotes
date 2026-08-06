@@ -190,7 +190,7 @@ func (r *RequirementResource) Create(ctx context.Context, req resource.CreateReq
 	}
 
 	// Call API
-	requirement, recovered, err := r.client.CreateRequirement(createReq)
+	requirement, recovered, err := r.client.CreateRequirement(ctx, createReq)
 	if err != nil {
 		addClientError(&resp.Diagnostics, "create requirement", err)
 		return
@@ -224,7 +224,7 @@ func (r *RequirementResource) Read(ctx context.Context, req resource.ReadRequest
 	}
 
 	// Get requirement from API
-	requirement, err := r.client.GetRequirement(data.RequirementID.ValueString())
+	requirement, err := r.client.GetRequirement(ctx, data.RequirementID.ValueString())
 	if err != nil {
 		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
@@ -271,7 +271,7 @@ func (r *RequirementResource) Update(ctx context.Context, req resource.UpdateReq
 	updateReq.RequirementOwners = &owners
 
 	// Call API
-	requirement, err := r.client.UpdateRequirement(data.RequirementID.ValueString(), updateReq)
+	requirement, err := r.client.UpdateRequirement(ctx, data.RequirementID.ValueString(), updateReq)
 	if err != nil {
 		addClientError(&resp.Diagnostics, "update requirement", err)
 		return
@@ -294,7 +294,7 @@ func (r *RequirementResource) Delete(ctx context.Context, req resource.DeleteReq
 		return
 	}
 
-	err := r.client.DeleteRequirement(data.RequirementID.ValueString())
+	err := r.client.DeleteRequirement(ctx, data.RequirementID.ValueString())
 	if err != nil && !client.IsNotFound(err) {
 		addClientError(&resp.Diagnostics, "delete requirement", err)
 		return

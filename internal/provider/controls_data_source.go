@@ -162,7 +162,7 @@ func (d *ControlsDataSource) Read(ctx context.Context, req datasource.ReadReques
 
 	frameworkID := data.FrameworkID.ValueString()
 
-	allControls, err := d.client.ListControls(frameworkID)
+	allControls, err := d.client.ListControls(ctx, frameworkID)
 	if err != nil {
 		addClientError(&resp.Diagnostics, "list controls", err)
 		return

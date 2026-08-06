@@ -172,7 +172,7 @@ func (p *AnecdotesProvider) Configure(ctx context.Context, req provider.Configur
 	}
 
 	// Create API client
-	apiClient, err := client.NewAnecdotesClient(apiKey, apiURL)
+	apiClient, err := client.NewAnecdotesClient(ctx, apiKey, apiURL)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to Create Anecdotes API Client",

@@ -110,7 +110,7 @@ func (d *ControlCategoriesDataSource) Read(ctx context.Context, req datasource.R
 		return
 	}
 
-	allCategories, err := d.client.ListControlCategories()
+	allCategories, err := d.client.ListControlCategories(ctx)
 	if err != nil {
 		addClientError(&resp.Diagnostics, "list control categories", err)
 		return

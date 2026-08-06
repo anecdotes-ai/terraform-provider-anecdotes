@@ -4,6 +4,7 @@
 package client
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -45,7 +46,7 @@ func captureRequest(t *testing.T, fn func(*AnecdotesClient) error) []byte {
 
 func TestSetControlOwners_SendsSingularFieldAndClears(t *testing.T) {
 	body := captureRequest(t, func(c *AnecdotesClient) error {
-		return c.SetControlOwners("c1", []string{"a@example.com"})
+		return c.SetControlOwners(context.Background(), "c1", []string{"a@example.com"})
 	})
 
 	var payload []map[string]interface{}
@@ -66,7 +67,7 @@ func TestSetControlOwners_SendsSingularFieldAndClears(t *testing.T) {
 	// Clearing must send an empty list, not null: a null value leaves the
 	// owners in place.
 	body = captureRequest(t, func(c *AnecdotesClient) error {
-		return c.SetControlOwners("c1", nil)
+		return c.SetControlOwners(context.Background(), "c1", nil)
 	})
 	if !strings.Contains(string(body), `"control_owner":[]`) {
 		t.Errorf("clearing owners must send an empty list, got %s", body)
@@ -97,14 +98,14 @@ func TestControlCreateRequest_SendsOwnersUnderTheSameField(t *testing.T) {
 
 func TestSetControlMaturityLevel_ClearsWithNull(t *testing.T) {
 	body := captureRequest(t, func(c *AnecdotesClient) error {
-		return c.SetControlMaturityLevel("c1", "")
+		return c.SetControlMaturityLevel(context.Background(), "c1", "")
 	})
 	if !strings.Contains(string(body), `"maturity_level":null`) {
 		t.Errorf("an empty level must be sent as null, got %s", body)
 	}
 
 	body = captureRequest(t, func(c *AnecdotesClient) error {
-		return c.SetControlMaturityLevel("c1", "DEFINED")
+		return c.SetControlMaturityLevel(context.Background(), "c1", "DEFINED")
 	})
 	if !strings.Contains(string(body), `"maturity_level":"DEFINED"`) {
 		t.Errorf("unexpected body: %s", body)
@@ -163,7 +164,7 @@ func TestUnlinkRequirementFromControl_SendsEmptyListNotNull(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	if err := newTestClient(t, srv).UnlinkRequirementFromControl("c1", "r1"); err != nil {
+	if err := newTestClient(t, srv).UnlinkRequirementFromControl(context.Background(), "c1", "r1"); err != nil {
 		t.Fatalf("unlink failed: %v", err)
 	}
 	if patched == nil {
@@ -193,7 +194,7 @@ func TestLinkEvidenceToRequirement_DoesNotSendOtherFields(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	if err := newTestClient(t, srv).LinkEvidenceToRequirement("req1", "e1"); err != nil {
+	if err := newTestClient(t, srv).LinkEvidenceToRequirement(context.Background(), "req1", "e1"); err != nil {
 		t.Fatalf("link failed: %v", err)
 	}
 	if patched == nil {
@@ -254,7 +255,7 @@ func TestDeleteRequirement_VerifiesTheOutcome(t *testing.T) {
 			}))
 			defer srv.Close()
 
-			err := newTestClient(t, srv).DeleteRequirement("r1")
+			err := newTestClient(t, srv).DeleteRequirement(context.Background(), "r1")
 			if c.wantErr && err == nil {
 				t.Error("expected an error when the requirement survived the delete, got none")
 			}

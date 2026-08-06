@@ -5,6 +5,7 @@ package client
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -59,7 +60,7 @@ func (k *keyedMutex) lock(key string) func() {
 var errRedirectRefused = errors.New("redirect refused")
 
 // NewAnecdotesClient creates a new Anecdotes API client
-func NewAnecdotesClient(apiKey, apiURL string) (*AnecdotesClient, error) {
+func NewAnecdotesClient(ctx context.Context, apiKey, apiURL string) (*AnecdotesClient, error) {
 	if apiKey == "" {
 		return nil, fmt.Errorf("api_key is required")
 	}
@@ -80,7 +81,7 @@ func NewAnecdotesClient(apiKey, apiURL string) (*AnecdotesClient, error) {
 	}
 
 	// Perform initial token exchange to validate credentials
-	if err := client.refreshToken(); err != nil {
+	if err := client.refreshToken(ctx); err != nil {
 		return nil, fmt.Errorf("failed to authenticate with Anecdotes API: %w", err)
 	}
 
@@ -89,12 +90,12 @@ func NewAnecdotesClient(apiKey, apiURL string) (*AnecdotesClient, error) {
 
 // refreshToken exchanges the API key for a JWT Bearer token. Transient
 // failures are retried; a rejected key is not.
-func (c *AnecdotesClient) refreshToken() error {
+func (c *AnecdotesClient) refreshToken(ctx context.Context) error {
 	var lastStatus int
 	var lastBody []byte
 
 	for attempt := 0; attempt <= maxRetries; attempt++ {
-		req, err := http.NewRequest("GET", c.apiURL+"/identity/v1/apikey/exchange", nil)
+		req, err := http.NewRequestWithContext(ctx, "GET", c.apiURL+"/identity/v1/apikey/exchange", nil)
 		if err != nil {
 			return fmt.Errorf("failed to create token exchange request: %w", err)
 		}
@@ -107,7 +108,9 @@ func (c *AnecdotesClient) refreshToken() error {
 			if errors.Is(err, errRedirectRefused) || attempt == maxRetries {
 				return fmt.Errorf("failed to exchange API key: %w", err)
 			}
-			time.Sleep(time.Duration(attempt+1) * retryBackoffBase)
+			if serr := sleepFor(ctx, time.Duration(attempt+1)*retryBackoffBase); serr != nil {
+				return serr
+			}
 			continue
 		}
 
@@ -141,7 +144,9 @@ func (c *AnecdotesClient) refreshToken() error {
 		if wait, ok := parseRetryAfter(retryAfter, time.Now()); ok {
 			backoff = wait
 		}
-		time.Sleep(backoff)
+		if serr := sleepFor(ctx, backoff); serr != nil {
+			return serr
+		}
 	}
 
 	// Redact via the shared parser, but return a PLAIN error on purpose:
@@ -154,8 +159,8 @@ func (c *AnecdotesClient) refreshToken() error {
 }
 
 // getToken returns a valid JWT token, refreshing if necessary
-func (c *AnecdotesClient) getToken() (string, error) {
-	if token, ok := c.cachedToken(); ok {
+func (c *AnecdotesClient) getToken(ctx context.Context) (string, error) {
+	if token, ok := c.cachedToken(ctx); ok {
 		return token, nil
 	}
 
@@ -163,11 +168,11 @@ func (c *AnecdotesClient) getToken() (string, error) {
 	c.refreshMu.Lock()
 	defer c.refreshMu.Unlock()
 
-	if token, ok := c.cachedToken(); ok {
+	if token, ok := c.cachedToken(ctx); ok {
 		return token, nil
 	}
 
-	if err := c.refreshToken(); err != nil {
+	if err := c.refreshToken(ctx); err != nil {
 		return "", err
 	}
 
@@ -177,7 +182,7 @@ func (c *AnecdotesClient) getToken() (string, error) {
 }
 
 // cachedToken returns the current token when it is still valid.
-func (c *AnecdotesClient) cachedToken() (string, bool) {
+func (c *AnecdotesClient) cachedToken(ctx context.Context) (string, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	if time.Now().Before(c.tokenExp) {
@@ -241,10 +246,22 @@ func parseRetryAfter(value string, now time.Time) (time.Duration, bool) {
 	return wait, true
 }
 
+// sleepFor waits for d, or stops early when ctx is cancelled.
+func sleepFor(ctx context.Context, d time.Duration) error {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
 // doRequest performs an authenticated HTTP request.
 // It treats 2xx and 304 (Not Modified) as success.
-func (c *AnecdotesClient) doRequest(method, path string, body interface{}) ([]byte, error) {
-	token, err := c.getToken()
+func (c *AnecdotesClient) doRequest(ctx context.Context, method, path string, body interface{}) ([]byte, error) {
+	token, err := c.getToken(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -265,7 +282,7 @@ func (c *AnecdotesClient) doRequest(method, path string, body interface{}) ([]by
 			reqBody = bytes.NewReader(jsonBody)
 		}
 
-		req, err := http.NewRequest(method, c.apiURL+path, reqBody)
+		req, err := http.NewRequestWithContext(ctx, method, c.apiURL+path, reqBody)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create request: %w", err)
 		}
@@ -280,7 +297,9 @@ func (c *AnecdotesClient) doRequest(method, path string, body interface{}) ([]by
 				return nil, lastErr
 			}
 			if attempt < maxRetries {
-				time.Sleep(time.Duration(attempt+1) * retryBackoffBase)
+				if serr := sleepFor(ctx, time.Duration(attempt+1)*retryBackoffBase); serr != nil {
+					return nil, serr
+				}
 				continue
 			}
 			return nil, lastErr
@@ -300,8 +319,8 @@ func (c *AnecdotesClient) doRequest(method, path string, body interface{}) ([]by
 		// time-based refresh window. Force a refresh and retry once.
 		if resp.StatusCode == http.StatusUnauthorized && !refreshed401 {
 			refreshed401 = true
-			if rerr := c.refreshToken(); rerr == nil {
-				if newToken, terr := c.getToken(); terr == nil {
+			if rerr := c.refreshToken(ctx); rerr == nil {
+				if newToken, terr := c.getToken(ctx); terr == nil {
 					token = newToken
 				}
 			}
@@ -322,15 +341,17 @@ func (c *AnecdotesClient) doRequest(method, path string, body interface{}) ([]by
 				backoff = wait
 			}
 		}
-		time.Sleep(backoff)
+		if serr := sleepFor(ctx, backoff); serr != nil {
+			return nil, serr
+		}
 	}
 
 	return nil, lastErr
 }
 
 // ListFrameworks retrieves all frameworks
-func (c *AnecdotesClient) ListFrameworks() ([]Framework, error) {
-	respBody, err := c.doRequest("GET", "/api/v1/framework", nil)
+func (c *AnecdotesClient) ListFrameworks(ctx context.Context) ([]Framework, error) {
+	respBody, err := c.doRequest(ctx, "GET", "/api/v1/framework", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -344,8 +365,8 @@ func (c *AnecdotesClient) ListFrameworks() ([]Framework, error) {
 }
 
 // GetFramework retrieves a specific framework by ID
-func (c *AnecdotesClient) GetFramework(frameworkID string) (*Framework, error) {
-	frameworks, err := c.ListFrameworks()
+func (c *AnecdotesClient) GetFramework(ctx context.Context, frameworkID string) (*Framework, error) {
+	frameworks, err := c.ListFrameworks(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -362,13 +383,13 @@ func (c *AnecdotesClient) GetFramework(frameworkID string) (*Framework, error) {
 // CreateFramework creates a new custom framework. When the create call returns
 // a server error, the framework is resolved by name; a conflict is returned to
 // the caller so an existing framework is never adopted.
-func (c *AnecdotesClient) CreateFramework(framework *FrameworkCreateRequest) (*Framework, error) {
-	respBody, err := c.doRequest("POST", "/api/v1/framework", framework)
+func (c *AnecdotesClient) CreateFramework(ctx context.Context, framework *FrameworkCreateRequest) (*Framework, error) {
+	respBody, err := c.doRequest(ctx, "POST", "/api/v1/framework", framework)
 	if err != nil {
 		// A conflict is returned as-is: adopting a framework that predates this
 		// create would take ownership of an object Terraform did not create.
 		if IsServerError(err) {
-			if existing, lErr := c.getFrameworkByName(framework.FrameworkName); lErr == nil && existing != nil {
+			if existing, lErr := c.getFrameworkByName(ctx, framework.FrameworkName); lErr == nil && existing != nil {
 				return existing, nil
 			}
 		}
@@ -379,19 +400,19 @@ func (c *AnecdotesClient) CreateFramework(framework *FrameworkCreateRequest) (*F
 	if err := json.Unmarshal(respBody, &frameworkID); err != nil {
 		var result Framework
 		if err2 := json.Unmarshal(respBody, &result); err2 != nil {
-			return c.getFrameworkByName(framework.FrameworkName)
+			return c.getFrameworkByName(ctx, framework.FrameworkName)
 		}
 		return &result, nil
 	}
 
 	// Fetch the full framework details using the returned ID
-	return c.GetFramework(frameworkID)
+	return c.GetFramework(ctx, frameworkID)
 }
 
 // getFrameworkByName finds a framework by its name. Used to resolve a framework
 // this client created when the create response cannot be used directly.
-func (c *AnecdotesClient) getFrameworkByName(name string) (*Framework, error) {
-	frameworks, err := c.ListFrameworks()
+func (c *AnecdotesClient) getFrameworkByName(ctx context.Context, name string) (*Framework, error) {
+	frameworks, err := c.ListFrameworks(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("framework lookup by name failed: %w", err)
 	}
@@ -405,47 +426,47 @@ func (c *AnecdotesClient) getFrameworkByName(name string) (*Framework, error) {
 
 // SetFrameworkAuditorControlStatus sets the auditor-visible control statuses via
 // the dedicated endpoint (the framework create/update body rejects this field).
-func (c *AnecdotesClient) SetFrameworkAuditorControlStatus(frameworkID string, status *FrameworkAuditorControlStatus) error {
-	_, err := c.doRequest("PUT", "/api/v1/framework/"+frameworkID+"/auditor_control_status", status)
+func (c *AnecdotesClient) SetFrameworkAuditorControlStatus(ctx context.Context, frameworkID string, status *FrameworkAuditorControlStatus) error {
+	_, err := c.doRequest(ctx, "PUT", "/api/v1/framework/"+frameworkID+"/auditor_control_status", status)
 	return err
 }
 
 // SetFrameworkAuditorEvidenceStatus sets the auditor-visible evidence statuses.
-func (c *AnecdotesClient) SetFrameworkAuditorEvidenceStatus(frameworkID string, status *FrameworkAuditorEvidenceStatus) error {
-	_, err := c.doRequest("PUT", "/api/v1/framework/"+frameworkID+"/auditor_evidence_status", status)
+func (c *AnecdotesClient) SetFrameworkAuditorEvidenceStatus(ctx context.Context, frameworkID string, status *FrameworkAuditorEvidenceStatus) error {
+	_, err := c.doRequest(ctx, "PUT", "/api/v1/framework/"+frameworkID+"/auditor_evidence_status", status)
 	return err
 }
 
 // UpdateFramework updates an existing framework
-func (c *AnecdotesClient) UpdateFramework(frameworkID string, framework *FrameworkUpdateRequest) (*Framework, error) {
-	respBody, err := c.doRequest("PATCH", "/api/v1/framework/"+frameworkID, framework)
+func (c *AnecdotesClient) UpdateFramework(ctx context.Context, frameworkID string, framework *FrameworkUpdateRequest) (*Framework, error) {
+	respBody, err := c.doRequest(ctx, "PATCH", "/api/v1/framework/"+frameworkID, framework)
 	if err != nil {
 		return nil, err
 	}
 
 	// If response is empty, fetch the updated framework
 	if len(respBody) == 0 {
-		return c.GetFramework(frameworkID)
+		return c.GetFramework(ctx, frameworkID)
 	}
 
 	var result Framework
 	if err := json.Unmarshal(respBody, &result); err != nil {
 		// Fallback: try fetching if parsing fails
-		return c.GetFramework(frameworkID)
+		return c.GetFramework(ctx, frameworkID)
 	}
 
 	return &result, nil
 }
 
 // DeleteFramework deletes a framework
-func (c *AnecdotesClient) DeleteFramework(frameworkID string) error {
-	_, err := c.doRequest("DELETE", "/api/v1/framework/"+frameworkID, nil)
+func (c *AnecdotesClient) DeleteFramework(ctx context.Context, frameworkID string) error {
+	_, err := c.doRequest(ctx, "DELETE", "/api/v1/framework/"+frameworkID, nil)
 	return err
 }
 
 // ListControlCategories retrieves all control categories
-func (c *AnecdotesClient) ListControlCategories() ([]ControlCategory, error) {
-	respBody, err := c.doRequest("GET", "/api/v1/framework/category", nil)
+func (c *AnecdotesClient) ListControlCategories(ctx context.Context) ([]ControlCategory, error) {
+	respBody, err := c.doRequest(ctx, "GET", "/api/v1/framework/category", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -462,11 +483,11 @@ func (c *AnecdotesClient) ListControlCategories() ([]ControlCategory, error) {
 // returns a server error, the category is resolved by name within the same
 // framework; a conflict is returned to the caller so an existing category is
 // never adopted (use `terraform import` for that).
-func (c *AnecdotesClient) CreateControlCategory(category *ControlCategoryCreateRequest) (*ControlCategory, error) {
-	respBody, err := c.doRequest("POST", "/api/v1/framework/category", category)
+func (c *AnecdotesClient) CreateControlCategory(ctx context.Context, category *ControlCategoryCreateRequest) (*ControlCategory, error) {
+	respBody, err := c.doRequest(ctx, "POST", "/api/v1/framework/category", category)
 	if err != nil {
 		if IsServerError(err) {
-			existing, lErr := c.getControlCategoryByName(category.CategoryName, category.FrameworkID)
+			existing, lErr := c.getControlCategoryByName(ctx, category.CategoryName, category.FrameworkID)
 			if lErr == nil && existing != nil {
 				return existing, nil
 			}
@@ -499,8 +520,8 @@ func (c *AnecdotesClient) CreateControlCategory(category *ControlCategoryCreateR
 // The match is scoped to the requested framework on purpose: matching a
 // same-named category from another framework would adopt an object this
 // create did not produce.
-func (c *AnecdotesClient) getControlCategoryByName(name, frameworkID string) (*ControlCategory, error) {
-	categories, err := c.ListControlCategories()
+func (c *AnecdotesClient) getControlCategoryByName(ctx context.Context, name, frameworkID string) (*ControlCategory, error) {
+	categories, err := c.ListControlCategories(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("category lookup by name failed: %w", err)
 	}
@@ -514,20 +535,20 @@ func (c *AnecdotesClient) getControlCategoryByName(name, frameworkID string) (*C
 }
 
 // UpdateControlCategory updates an existing control category
-func (c *AnecdotesClient) UpdateControlCategory(categoryID string, category *ControlCategoryUpdateRequest) error {
-	_, err := c.doRequest("PATCH", "/api/v1/framework/category/"+categoryID, category)
+func (c *AnecdotesClient) UpdateControlCategory(ctx context.Context, categoryID string, category *ControlCategoryUpdateRequest) error {
+	_, err := c.doRequest(ctx, "PATCH", "/api/v1/framework/category/"+categoryID, category)
 	return err
 }
 
 // DeleteControlCategory deletes a control category
-func (c *AnecdotesClient) DeleteControlCategory(categoryID string) error {
-	_, err := c.doRequest("DELETE", "/api/v1/framework/category/"+categoryID, nil)
+func (c *AnecdotesClient) DeleteControlCategory(ctx context.Context, categoryID string) error {
+	_, err := c.doRequest(ctx, "DELETE", "/api/v1/framework/category/"+categoryID, nil)
 	return err
 }
 
 // GetControlCategory retrieves a specific category by searching through all categories
-func (c *AnecdotesClient) GetControlCategory(categoryID string) (*ControlCategory, error) {
-	categories, err := c.ListControlCategories()
+func (c *AnecdotesClient) GetControlCategory(ctx context.Context, categoryID string) (*ControlCategory, error) {
+	categories, err := c.ListControlCategories(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -542,12 +563,12 @@ func (c *AnecdotesClient) GetControlCategory(categoryID string) (*ControlCategor
 }
 
 // GetControl retrieves a specific control by ID
-func (c *AnecdotesClient) GetControl(frameworkID, controlID string) (*Control, error) {
+func (c *AnecdotesClient) GetControl(ctx context.Context, frameworkID, controlID string) (*Control, error) {
 	// Use POST /control/read to get control by ID
 	body := map[string][]string{
 		"controls_ids": {controlID},
 	}
-	respBody, err := c.doRequest("POST", "/controls/control/read", body)
+	respBody, err := c.doRequest(ctx, "POST", "/controls/control/read", body)
 	if err != nil {
 		return nil, err
 	}
@@ -566,8 +587,8 @@ func (c *AnecdotesClient) GetControl(frameworkID, controlID string) (*Control, e
 
 // ListControls retrieves all controls for a framework.
 // Uses the controls service path /controls/framework_controls (per OpenAPI).
-func (c *AnecdotesClient) ListControls(frameworkID string) ([]Control, error) {
-	respBody, err := c.doRequest("GET", "/controls/framework_controls?frameworks_ids="+frameworkID, nil)
+func (c *AnecdotesClient) ListControls(ctx context.Context, frameworkID string) ([]Control, error) {
+	respBody, err := c.doRequest(ctx, "GET", "/controls/framework_controls?frameworks_ids="+frameworkID, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -583,8 +604,8 @@ func (c *AnecdotesClient) ListControls(frameworkID string) ([]Control, error) {
 }
 
 // AddControl adds a single control to a framework.
-func (c *AnecdotesClient) AddControl(frameworkID string, control *ControlCreateRequest) (*Control, error) {
-	respBody, err := c.doRequest("POST", "/controls/control?control_framework="+frameworkID, control)
+func (c *AnecdotesClient) AddControl(ctx context.Context, frameworkID string, control *ControlCreateRequest) (*Control, error) {
+	respBody, err := c.doRequest(ctx, "POST", "/controls/control?control_framework="+frameworkID, control)
 	if err != nil {
 		return nil, err
 	}
@@ -593,7 +614,7 @@ func (c *AnecdotesClient) AddControl(frameworkID string, control *ControlCreateR
 	var controlID string
 	if err := json.Unmarshal(respBody, &controlID); err == nil && controlID != "" {
 		// Fetch the full control details
-		return c.GetControl(frameworkID, controlID)
+		return c.GetControl(ctx, frameworkID, controlID)
 	}
 
 	// Try parsing as full Control object
@@ -606,34 +627,34 @@ func (c *AnecdotesClient) AddControl(frameworkID string, control *ControlCreateR
 }
 
 // UpdateControl updates an existing control
-func (c *AnecdotesClient) UpdateControl(frameworkID, controlID string, control *ControlUpdateRequest) (*Control, error) {
-	respBody, err := c.doRequest("PUT", "/controls/control/"+controlID, control)
+func (c *AnecdotesClient) UpdateControl(ctx context.Context, frameworkID, controlID string, control *ControlUpdateRequest) (*Control, error) {
+	respBody, err := c.doRequest(ctx, "PUT", "/controls/control/"+controlID, control)
 	if err != nil {
 		return nil, err
 	}
 
 	// Response may be empty on success, fetch updated control
 	if len(respBody) == 0 || string(respBody) == "{}" {
-		return c.GetControl(frameworkID, controlID)
+		return c.GetControl(ctx, frameworkID, controlID)
 	}
 
 	var result Control
 	if err := json.Unmarshal(respBody, &result); err != nil {
 		// If parsing fails, try to fetch the updated control
-		return c.GetControl(frameworkID, controlID)
+		return c.GetControl(ctx, frameworkID, controlID)
 	}
 
 	return &result, nil
 }
 
 // DeleteControl deletes a control from a framework
-func (c *AnecdotesClient) DeleteControl(frameworkID, controlID string) error {
-	_, err := c.doRequest("DELETE", "/controls/control/"+controlID, nil)
+func (c *AnecdotesClient) DeleteControl(ctx context.Context, frameworkID, controlID string) error {
+	_, err := c.doRequest(ctx, "DELETE", "/controls/control/"+controlID, nil)
 	return err
 }
 
 // SetControlOwners replaces a control's owners. An empty slice clears them.
-func (c *AnecdotesClient) SetControlOwners(controlID string, owners []string) error {
+func (c *AnecdotesClient) SetControlOwners(ctx context.Context, controlID string, owners []string) error {
 	if owners == nil {
 		owners = []string{}
 	}
@@ -645,13 +666,13 @@ func (c *AnecdotesClient) SetControlOwners(controlID string, owners []string) er
 		},
 	}
 
-	_, err := c.doRequest("PATCH", "/controls/controls", body)
+	_, err := c.doRequest(ctx, "PATCH", "/controls/controls", body)
 	return err
 }
 
 // SetControlMaturityLevel sets the maturity level for one or more controls
 // An empty level clears the control's maturity level.
-func (c *AnecdotesClient) SetControlMaturityLevel(controlID, maturityLevel string) error {
+func (c *AnecdotesClient) SetControlMaturityLevel(ctx context.Context, controlID, maturityLevel string) error {
 	var level interface{}
 	if maturityLevel != "" {
 		level = maturityLevel
@@ -666,13 +687,13 @@ func (c *AnecdotesClient) SetControlMaturityLevel(controlID, maturityLevel strin
 		},
 	}
 
-	_, err := c.doRequest("PATCH", "/controls/controls/maturity_level", body)
+	_, err := c.doRequest(ctx, "PATCH", "/controls/controls/maturity_level", body)
 	return err
 }
 
 // GetRequirement retrieves a specific requirement by ID
-func (c *AnecdotesClient) GetRequirement(requirementID string) (*Requirement, error) {
-	respBody, err := c.doRequest("GET", "/api/v1/requirement/"+requirementID, nil)
+func (c *AnecdotesClient) GetRequirement(ctx context.Context, requirementID string) (*Requirement, error) {
+	respBody, err := c.doRequest(ctx, "GET", "/api/v1/requirement/"+requirementID, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -684,7 +705,7 @@ func (c *AnecdotesClient) GetRequirement(requirementID string) (*Requirement, er
 		if len(results) == 0 {
 			return nil, fmt.Errorf("requirement not found: %s: %w", requirementID, ErrNotFound)
 		}
-		c.resolveRequirementStatusNames([]*Requirement{&results[0]})
+		c.resolveRequirementStatusNames(ctx, []*Requirement{&results[0]})
 		return &results[0], nil
 	}
 
@@ -694,14 +715,14 @@ func (c *AnecdotesClient) GetRequirement(requirementID string) (*Requirement, er
 		return nil, fmt.Errorf("failed to parse requirement response: %w", err)
 	}
 
-	c.resolveRequirementStatusNames([]*Requirement{&result})
+	c.resolveRequirementStatusNames(ctx, []*Requirement{&result})
 	return &result, nil
 }
 
 // ListRequirements retrieves all requirements from the Requirements Hub.
 // GET /api/v1/requirement (no id) returns all requirement instances per OpenAPI.
-func (c *AnecdotesClient) ListRequirements() ([]Requirement, error) {
-	respBody, err := c.doRequest("GET", "/api/v1/requirement", nil)
+func (c *AnecdotesClient) ListRequirements(ctx context.Context) ([]Requirement, error) {
+	respBody, err := c.doRequest(ctx, "GET", "/api/v1/requirement", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -715,7 +736,7 @@ func (c *AnecdotesClient) ListRequirements() ([]Requirement, error) {
 	for i := range requirements {
 		ptrs[i] = &requirements[i]
 	}
-	c.resolveRequirementStatusNames(ptrs)
+	c.resolveRequirementStatusNames(ctx, ptrs)
 
 	return requirements, nil
 }
@@ -723,13 +744,13 @@ func (c *AnecdotesClient) ListRequirements() ([]Requirement, error) {
 // CreateRequirement creates a new requirement in the Requirements Hub. The
 // second return value reports whether the requirement was resolved by name
 // after a server error rather than read back from the create call.
-func (c *AnecdotesClient) CreateRequirement(requirement *RequirementCreateRequest) (*Requirement, bool, error) {
-	respBody, err := c.doRequest("POST", "/api/v1/requirement", requirement)
+func (c *AnecdotesClient) CreateRequirement(ctx context.Context, requirement *RequirementCreateRequest) (*Requirement, bool, error) {
+	respBody, err := c.doRequest(ctx, "POST", "/api/v1/requirement", requirement)
 	if err != nil {
 		// A conflict is returned as-is: adopting a requirement that predates this
 		// create would take ownership of an object Terraform did not create.
 		if IsServerError(err) {
-			existing, lErr := c.getRequirementByName(requirement.RequirementDescription)
+			existing, lErr := c.getRequirementByName(ctx, requirement.RequirementDescription)
 			if lErr == nil && existing != nil {
 				return existing, true, nil
 			}
@@ -739,7 +760,7 @@ func (c *AnecdotesClient) CreateRequirement(requirement *RequirementCreateReques
 
 	var requirementID string
 	if err := json.Unmarshal(respBody, &requirementID); err == nil && requirementID != "" {
-		created, err := c.GetRequirement(requirementID)
+		created, err := c.GetRequirement(ctx, requirementID)
 		return created, false, err
 	}
 
@@ -753,8 +774,8 @@ func (c *AnecdotesClient) CreateRequirement(requirement *RequirementCreateReques
 
 // getRequirementByName finds a requirement by its description/name. Used to
 // resolve a requirement this client created when the create call returned an error.
-func (c *AnecdotesClient) getRequirementByName(name string) (*Requirement, error) {
-	requirements, err := c.ListRequirements()
+func (c *AnecdotesClient) getRequirementByName(ctx context.Context, name string) (*Requirement, error) {
+	requirements, err := c.ListRequirements(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("requirement create failed and list fallback also failed: %w", err)
 	}
@@ -769,23 +790,23 @@ func (c *AnecdotesClient) getRequirementByName(name string) (*Requirement, error
 
 // UpdateRequirement updates an existing requirement.
 // The API requires the request body wrapped in {"requirement": {...}}.
-func (c *AnecdotesClient) UpdateRequirement(requirementID string, requirement *RequirementUpdateRequest) (*Requirement, error) {
+func (c *AnecdotesClient) UpdateRequirement(ctx context.Context, requirementID string, requirement *RequirementUpdateRequest) (*Requirement, error) {
 	wrapped := map[string]interface{}{"requirement": requirement}
-	_, err := c.doRequest("PATCH", "/api/v1/requirement/"+requirementID, wrapped)
+	_, err := c.doRequest(ctx, "PATCH", "/api/v1/requirement/"+requirementID, wrapped)
 	if err != nil {
 		return nil, err
 	}
 
 	// Fetch updated requirement
-	return c.GetRequirement(requirementID)
+	return c.GetRequirement(ctx, requirementID)
 }
 
 // DeleteRequirement deletes a requirement. The response reports how many
 // requirements were removed; zero means the requirement was either already gone
 // or could not be removed, so which one is confirmed by reading it back rather
 // than reporting a success that did not happen.
-func (c *AnecdotesClient) DeleteRequirement(requirementID string) error {
-	respBody, err := c.doRequest("POST", "/api/v1/requirement/delete", []string{requirementID})
+func (c *AnecdotesClient) DeleteRequirement(ctx context.Context, requirementID string) error {
+	respBody, err := c.doRequest(ctx, "POST", "/api/v1/requirement/delete", []string{requirementID})
 	if err != nil {
 		return err
 	}
@@ -799,7 +820,7 @@ func (c *AnecdotesClient) DeleteRequirement(requirementID string) error {
 		return nil
 	}
 
-	_, err = c.GetRequirement(requirementID)
+	_, err = c.GetRequirement(ctx, requirementID)
 	if IsNotFound(err) {
 		return nil
 	}
@@ -814,8 +835,8 @@ func (c *AnecdotesClient) DeleteRequirement(requirementID string) error {
 // ListRequirementStatuses fetches the available requirement status options.
 // API: GET /api/v1/requirement/status
 // Returns a map of status name → status ID.
-func (c *AnecdotesClient) ListRequirementStatuses() (map[string]string, error) {
-	respBody, err := c.doRequest("GET", "/api/v1/requirement/status", nil)
+func (c *AnecdotesClient) ListRequirementStatuses(ctx context.Context) (map[string]string, error) {
+	respBody, err := c.doRequest(ctx, "GET", "/api/v1/requirement/status", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -837,8 +858,8 @@ func (c *AnecdotesClient) ListRequirementStatuses() (map[string]string, error) {
 
 // requirementStatusNameByID returns a status-ID → status-name map (the inverse of
 // ListRequirementStatuses, which returns name → ID). Returns nil on lookup failure.
-func (c *AnecdotesClient) requirementStatusNameByID() map[string]string {
-	statusMap, err := c.ListRequirementStatuses()
+func (c *AnecdotesClient) requirementStatusNameByID(ctx context.Context) map[string]string {
+	statusMap, err := c.ListRequirementStatuses(ctx)
 	if err != nil {
 		return nil
 	}
@@ -854,7 +875,7 @@ func (c *AnecdotesClient) requirementStatusNameByID() map[string]string {
 // the status ID, so RequirementStatusName / RequirementStatus would otherwise be
 // empty. Best-effort: requirements are left unchanged if the status list can't be
 // fetched, and only one statuses lookup is performed for the whole batch.
-func (c *AnecdotesClient) resolveRequirementStatusNames(reqs []*Requirement) {
+func (c *AnecdotesClient) resolveRequirementStatusNames(ctx context.Context, reqs []*Requirement) {
 	needsResolve := false
 	for _, r := range reqs {
 		if r.RequirementStatusName == "" && r.RequirementStatusID != "" {
@@ -866,7 +887,7 @@ func (c *AnecdotesClient) resolveRequirementStatusNames(reqs []*Requirement) {
 		return
 	}
 
-	nameByID := c.requirementStatusNameByID()
+	nameByID := c.requirementStatusNameByID(ctx)
 	if nameByID == nil {
 		return
 	}
@@ -888,11 +909,11 @@ func (c *AnecdotesClient) resolveRequirementStatusNames(reqs []*Requirement) {
 
 // LinkRequirementToControl links a requirement to a control using read-modify-write
 // via PATCH /controls/controls (the dedicated link endpoint returns 404).
-func (c *AnecdotesClient) LinkRequirementToControl(controlID, requirementID string) (*ControlRequirementLink, error) {
+func (c *AnecdotesClient) LinkRequirementToControl(ctx context.Context, controlID, requirementID string) (*ControlRequirementLink, error) {
 	defer c.parentLocks.lock("control:" + controlID)()
 
 	// Read current control to get existing requirement IDs
-	control, err := c.GetControl("", controlID)
+	control, err := c.GetControl(ctx, "", controlID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read control %s: %w", controlID, err)
 	}
@@ -910,7 +931,7 @@ func (c *AnecdotesClient) LinkRequirementToControl(controlID, requirementID stri
 
 	// Append the new requirement and update
 	updatedIDs := append(control.RequirementIDs, requirementID)
-	if err := c.UpdateControlRequirements(controlID, updatedIDs); err != nil {
+	if err := c.UpdateControlRequirements(ctx, controlID, updatedIDs); err != nil {
 		return nil, fmt.Errorf("failed to link requirement %s to control %s: %w", requirementID, controlID, err)
 	}
 
@@ -923,11 +944,11 @@ func (c *AnecdotesClient) LinkRequirementToControl(controlID, requirementID stri
 
 // UnlinkRequirementFromControl removes a requirement link from a control using
 // read-modify-write via PATCH /controls/controls.
-func (c *AnecdotesClient) UnlinkRequirementFromControl(controlID, requirementID string) error {
+func (c *AnecdotesClient) UnlinkRequirementFromControl(ctx context.Context, controlID, requirementID string) error {
 	defer c.parentLocks.lock("control:" + controlID)()
 
 	// Read current control to get existing requirement IDs
-	control, err := c.GetControl("", controlID)
+	control, err := c.GetControl(ctx, "", controlID)
 	if err != nil {
 		return fmt.Errorf("failed to read control %s: %w", controlID, err)
 	}
@@ -944,13 +965,13 @@ func (c *AnecdotesClient) UnlinkRequirementFromControl(controlID, requirementID 
 		return nil // Already unlinked, no-op
 	}
 
-	return c.UpdateControlRequirements(controlID, updatedIDs)
+	return c.UpdateControlRequirements(ctx, controlID, updatedIDs)
 }
 
 // GetControlRequirementLink verifies a link exists between a control and requirement.
 // Uses POST /controls/control/read to read control_requirement_ids from the control.
-func (c *AnecdotesClient) GetControlRequirementLink(controlID, requirementID string) (*ControlRequirementLink, error) {
-	control, err := c.GetControl("", controlID)
+func (c *AnecdotesClient) GetControlRequirementLink(ctx context.Context, controlID, requirementID string) (*ControlRequirementLink, error) {
+	control, err := c.GetControl(ctx, "", controlID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read control %s: %w", controlID, err)
 	}
@@ -970,7 +991,7 @@ func (c *AnecdotesClient) GetControlRequirementLink(controlID, requirementID str
 }
 
 // UpdateControlRequirements updates the requirements linked to a control
-func (c *AnecdotesClient) UpdateControlRequirements(controlID string, requirementIDs []string) error {
+func (c *AnecdotesClient) UpdateControlRequirements(ctx context.Context, controlID string, requirementIDs []string) error {
 	payload := []map[string]interface{}{
 		{
 			"control_id":                   controlID,
@@ -979,7 +1000,7 @@ func (c *AnecdotesClient) UpdateControlRequirements(controlID string, requiremen
 		},
 	}
 
-	_, err := c.doRequest("PATCH", "/controls/controls", payload)
+	_, err := c.doRequest(ctx, "PATCH", "/controls/controls", payload)
 	if err != nil {
 		return fmt.Errorf("failed to update control requirements: %w", err)
 	}
@@ -988,8 +1009,8 @@ func (c *AnecdotesClient) UpdateControlRequirements(controlID string, requiremen
 }
 
 // CreateFolder creates a new folder for organizing frameworks
-func (c *AnecdotesClient) CreateFolder(folder *FolderCreateRequest) (*Folder, error) {
-	respBody, err := c.doRequest("POST", "/frameworks/v1/folders", folder)
+func (c *AnecdotesClient) CreateFolder(ctx context.Context, folder *FolderCreateRequest) (*Folder, error) {
+	respBody, err := c.doRequest(ctx, "POST", "/frameworks/v1/folders", folder)
 	if err != nil {
 		return nil, err
 	}
@@ -1008,8 +1029,8 @@ func (c *AnecdotesClient) CreateFolder(folder *FolderCreateRequest) (*Folder, er
 }
 
 // GetFolder retrieves a specific folder by ID
-func (c *AnecdotesClient) GetFolder(folderID string) (*Folder, error) {
-	respBody, err := c.doRequest("GET", "/frameworks/v1/folders/"+folderID, nil)
+func (c *AnecdotesClient) GetFolder(ctx context.Context, folderID string) (*Folder, error) {
+	respBody, err := c.doRequest(ctx, "GET", "/frameworks/v1/folders/"+folderID, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1023,8 +1044,8 @@ func (c *AnecdotesClient) GetFolder(folderID string) (*Folder, error) {
 }
 
 // ListFolders retrieves all folders
-func (c *AnecdotesClient) ListFolders() ([]Folder, error) {
-	respBody, err := c.doRequest("GET", "/frameworks/v1/folders", nil)
+func (c *AnecdotesClient) ListFolders(ctx context.Context) ([]Folder, error) {
+	respBody, err := c.doRequest(ctx, "GET", "/frameworks/v1/folders", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1038,35 +1059,35 @@ func (c *AnecdotesClient) ListFolders() ([]Folder, error) {
 }
 
 // UpdateFolder updates an existing folder
-func (c *AnecdotesClient) UpdateFolder(folderID string, folder *FolderUpdateRequest) (*Folder, error) {
-	respBody, err := c.doRequest("PATCH", "/frameworks/v1/folders/"+folderID, folder)
+func (c *AnecdotesClient) UpdateFolder(ctx context.Context, folderID string, folder *FolderUpdateRequest) (*Folder, error) {
+	respBody, err := c.doRequest(ctx, "PATCH", "/frameworks/v1/folders/"+folderID, folder)
 	if err != nil {
 		return nil, err
 	}
 
 	// If response is empty, fetch the updated folder
 	if len(respBody) == 0 {
-		return c.GetFolder(folderID)
+		return c.GetFolder(ctx, folderID)
 	}
 
 	var result Folder
 	if err := json.Unmarshal(respBody, &result); err != nil {
-		return c.GetFolder(folderID)
+		return c.GetFolder(ctx, folderID)
 	}
 
 	return &result, nil
 }
 
 // DeleteFolder deletes a folder
-func (c *AnecdotesClient) DeleteFolder(folderID string) error {
-	_, err := c.doRequest("DELETE", "/frameworks/v1/folders/"+folderID, nil)
+func (c *AnecdotesClient) DeleteFolder(ctx context.Context, folderID string) error {
+	_, err := c.doRequest(ctx, "DELETE", "/frameworks/v1/folders/"+folderID, nil)
 	return err
 }
 
 // FindFrameworkFolder returns the ID of the folder containing the framework,
 // or "" when the framework is not in any folder.
-func (c *AnecdotesClient) FindFrameworkFolder(frameworkID string) (string, error) {
-	folders, err := c.ListFolders()
+func (c *AnecdotesClient) FindFrameworkFolder(ctx context.Context, frameworkID string) (string, error) {
+	folders, err := c.ListFolders(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -1082,19 +1103,19 @@ func (c *AnecdotesClient) FindFrameworkFolder(frameworkID string) (string, error
 
 // MoveFrameworkFolder moves a framework between folders. Both folder IDs must
 // reference existing folders.
-func (c *AnecdotesClient) MoveFrameworkFolder(frameworkID, fromFolderID, toFolderID string) error {
+func (c *AnecdotesClient) MoveFrameworkFolder(ctx context.Context, frameworkID, fromFolderID, toFolderID string) error {
 	body := map[string]string{
 		"remove_from_folder_id": fromFolderID,
 		"add_to_folder_id":      toFolderID,
 	}
-	_, err := c.doRequest("PUT", "/frameworks/v1/folders/framework/"+frameworkID, body)
+	_, err := c.doRequest(ctx, "PUT", "/frameworks/v1/folders/framework/"+frameworkID, body)
 	return err
 }
 
 // ListEvidences returns all evidences in the account.
 // GET /evidence/v1/evidence returns a flat JSON array of Evidence objects.
-func (c *AnecdotesClient) ListEvidences() ([]Evidence, error) {
-	respBody, err := c.doRequest("GET", "/evidence/v1/evidence", nil)
+func (c *AnecdotesClient) ListEvidences(ctx context.Context) ([]Evidence, error) {
+	respBody, err := c.doRequest(ctx, "GET", "/evidence/v1/evidence", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1110,10 +1131,10 @@ func (c *AnecdotesClient) ListEvidences() ([]Evidence, error) {
 // LinkEvidenceToRequirement adds an evidence ID to a requirement's evidence list.
 // Uses read-modify-write: reads current list, appends if missing, PATCHes back.
 // The API uses `requirement_related_evidences` for write and `requirement_evidence_ids` for read.
-func (c *AnecdotesClient) LinkEvidenceToRequirement(requirementID, evidenceID string) error {
+func (c *AnecdotesClient) LinkEvidenceToRequirement(ctx context.Context, requirementID, evidenceID string) error {
 	defer c.parentLocks.lock("requirement:" + requirementID)()
 
-	req, err := c.GetRequirement(requirementID)
+	req, err := c.GetRequirement(ctx, requirementID)
 	if err != nil {
 		return fmt.Errorf("failed to read requirement %s: %w", requirementID, err)
 	}
@@ -1131,15 +1152,15 @@ func (c *AnecdotesClient) LinkEvidenceToRequirement(requirementID, evidenceID st
 		RequirementRelatedEvidences: &updatedEvidences,
 	}
 
-	_, err = c.UpdateRequirement(requirementID, updateReq)
+	_, err = c.UpdateRequirement(ctx, requirementID, updateReq)
 	return err
 }
 
 // UnlinkEvidenceFromRequirement removes an evidence ID from a requirement's evidence list.
-func (c *AnecdotesClient) UnlinkEvidenceFromRequirement(requirementID, evidenceID string) error {
+func (c *AnecdotesClient) UnlinkEvidenceFromRequirement(ctx context.Context, requirementID, evidenceID string) error {
 	defer c.parentLocks.lock("requirement:" + requirementID)()
 
-	req, err := c.GetRequirement(requirementID)
+	req, err := c.GetRequirement(ctx, requirementID)
 	if err != nil {
 		return fmt.Errorf("failed to read requirement %s: %w", requirementID, err)
 	}
@@ -1163,14 +1184,14 @@ func (c *AnecdotesClient) UnlinkEvidenceFromRequirement(requirementID, evidenceI
 		RequirementRelatedEvidences: &updatedEvidences,
 	}
 
-	_, err = c.UpdateRequirement(requirementID, updateReq)
+	_, err = c.UpdateRequirement(ctx, requirementID, updateReq)
 	return err
 }
 
 // GetRequirementEvidenceLink checks if an evidence ID is linked to a requirement.
 // Returns nil if linked, error if not found.
-func (c *AnecdotesClient) GetRequirementEvidenceLink(requirementID, evidenceID string) error {
-	req, err := c.GetRequirement(requirementID)
+func (c *AnecdotesClient) GetRequirementEvidenceLink(ctx context.Context, requirementID, evidenceID string) error {
+	req, err := c.GetRequirement(ctx, requirementID)
 	if err != nil {
 		return fmt.Errorf("failed to read requirement %s: %w", requirementID, err)
 	}
@@ -1186,8 +1207,8 @@ func (c *AnecdotesClient) GetRequirementEvidenceLink(requirementID, evidenceID s
 
 // GetControlMaturityLevel reads the maturity level from a control.
 // Note: SetControlMaturityLevel already exists above (line ~449).
-func (c *AnecdotesClient) GetControlMaturityLevel(controlID string) (string, error) {
-	respBody, err := c.doRequest("POST", "/controls/control/read", map[string][]string{
+func (c *AnecdotesClient) GetControlMaturityLevel(ctx context.Context, controlID string) (string, error) {
+	respBody, err := c.doRequest(ctx, "POST", "/controls/control/read", map[string][]string{
 		"controls_ids": {controlID},
 	})
 	if err != nil {

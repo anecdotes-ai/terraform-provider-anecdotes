@@ -4,6 +4,7 @@
 package provider
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"testing"
@@ -59,7 +60,7 @@ func testCheckControlOwnersOnPlatform(t *testing.T, resourceName string, want ..
 		if err != nil {
 			return err
 		}
-		control, err := testAccNewClient(t).GetControl(frameworkID, controlID)
+		control, err := testAccNewClient(t).GetControl(context.Background(), frameworkID, controlID)
 		if err != nil {
 			return fmt.Errorf("reading control %s: %w", controlID, err)
 		}
@@ -167,7 +168,7 @@ func testAccPlatformControlImportID(t *testing.T) string {
 	t.Helper()
 
 	c := testAccNewClient(t)
-	frameworks, err := c.ListFrameworks()
+	frameworks, err := c.ListFrameworks(context.Background())
 	if err != nil {
 		t.Fatalf("listing frameworks: %v", err)
 	}
@@ -175,7 +176,7 @@ func testAccPlatformControlImportID(t *testing.T) string {
 		if !framework.IsApplicable {
 			continue
 		}
-		controls, err := c.ListControls(framework.FrameworkID)
+		controls, err := c.ListControls(context.Background(), framework.FrameworkID)
 		if err != nil {
 			continue
 		}

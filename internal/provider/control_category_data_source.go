@@ -87,7 +87,7 @@ func (d *ControlCategoryDataSource) Read(ctx context.Context, req datasource.Rea
 	categoryID := data.CategoryID.ValueString()
 
 	// Get control category from API
-	category, err := d.client.GetControlCategory(categoryID)
+	category, err := d.client.GetControlCategory(ctx, categoryID)
 	if err != nil {
 		addClientError(&resp.Diagnostics, fmt.Sprintf("read control category with ID %s", categoryID), err)
 		return

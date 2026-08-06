@@ -210,7 +210,7 @@ func (d *EvidencesDataSource) Read(ctx context.Context, req datasource.ReadReque
 		return
 	}
 
-	allEvidences, err := d.client.ListEvidences()
+	allEvidences, err := d.client.ListEvidences(ctx)
 	if err != nil {
 		addClientError(&resp.Diagnostics, "list evidences", err)
 		return
