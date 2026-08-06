@@ -299,6 +299,8 @@ func TestDoRequest_PersistentNon2xxIsNotInfiniteLoop(t *testing.T) {
 // otherwise satisfy IsNotFound/IsServerError and trigger state-drop or create
 // recovery for a request that was never sent.
 func TestTokenRefreshErrors_DoNotClassify(t *testing.T) {
+	// A 500 from the identity endpoint is now retried, so keep the waits short.
+	shortenRetryBackoff(t)
 	for _, status := range []int{404, 500} {
 		var exchangeFails atomic.Bool
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -25,6 +25,11 @@ type AnecdotesClient struct {
 	tokenExp   time.Time
 	mu         sync.RWMutex
 
+	// Serializes token refreshes. Without it, every goroutine that finds the
+	// token expired exchanges the API key itself, and at Terraform's default
+	// parallelism that is ten simultaneous calls to the identity endpoint.
+	refreshMu sync.Mutex
+
 	// Serializes updates that rewrite a parent object's list.
 	parentLocks keyedMutex
 }
@@ -84,56 +89,88 @@ func NewAnecdotesClient(apiKey, apiURL string) (*AnecdotesClient, error) {
 	return client, nil
 }
 
-// refreshToken exchanges the API key for a JWT Bearer token
+// refreshToken exchanges the API key for a JWT Bearer token. A rate-limited or
+// briefly unavailable identity endpoint is retried: it is a transient fault, and
+// reporting it as an authentication failure sends users to check a key that is
+// perfectly valid.
 func (c *AnecdotesClient) refreshToken() error {
-	req, err := http.NewRequest("GET", c.apiURL+"/identity/v1/apikey/exchange", nil)
-	if err != nil {
-		return fmt.Errorf("failed to create token exchange request: %w", err)
+	var lastStatus int
+	var lastBody []byte
+
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		req, err := http.NewRequest("GET", c.apiURL+"/identity/v1/apikey/exchange", nil)
+		if err != nil {
+			return fmt.Errorf("failed to create token exchange request: %w", err)
+		}
+
+		req.Header.Set("x-anecdotes-api-key", c.apiKey)
+
+		resp, err := c.httpClient.Do(req)
+		if err != nil {
+			// A refused redirect can never succeed on retry.
+			if errors.Is(err, errRedirectRefused) || attempt == maxRetries {
+				return fmt.Errorf("failed to exchange API key: %w", err)
+			}
+			time.Sleep(time.Duration(attempt+1) * retryBackoffBase)
+			continue
+		}
+
+		body, readErr := io.ReadAll(resp.Body)
+		status := resp.StatusCode
+		retryAfter := resp.Header.Get("Retry-After")
+		_ = resp.Body.Close()
+
+		if status == http.StatusOK {
+			if readErr != nil {
+				return fmt.Errorf("failed to read token response: %w", readErr)
+			}
+			c.mu.Lock()
+			// The response is the JWT token as plain text.
+			c.token = string(body)
+			// Token is valid for 60 minutes, refresh 5 minutes before expiry
+			c.tokenExp = time.Now().Add(55 * time.Minute)
+			c.mu.Unlock()
+			return nil
+		}
+
+		lastStatus, lastBody = status, body
+
+		// A rejected key stays rejected, so only transient statuses are retried.
+		transient := status == http.StatusTooManyRequests || status >= 500
+		if !transient || attempt == maxRetries {
+			break
+		}
+
+		backoff := time.Duration(attempt+1) * retryBackoffBase
+		if wait, ok := parseRetryAfter(retryAfter, time.Now()); ok {
+			backoff = wait
+		}
+		time.Sleep(backoff)
 	}
 
-	req.Header.Set("x-anecdotes-api-key", c.apiKey)
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to exchange API key: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		// Redact via the shared parser, but return a PLAIN error on purpose:
-		// authentication failures must not carry API error classification. A
-		// classified 404/5xx from the identity endpoint would otherwise satisfy
-		// IsNotFound/IsServerError in callers — dropping healthy resources from
-		// state or triggering create recovery for a request that was never sent.
-		apiErr := parseAPIError("GET", "/identity/v1/apikey/exchange", resp.StatusCode, body)
-		return fmt.Errorf("API key exchange failed (HTTP %d): %s", resp.StatusCode, apiErr.Message)
-	}
-
-	// The response is the JWT token as plain text
-	tokenBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("failed to read token response: %w", err)
-	}
-
-	c.mu.Lock()
-	c.token = string(tokenBytes)
-	// Token is valid for 60 minutes, refresh 5 minutes before expiry
-	c.tokenExp = time.Now().Add(55 * time.Minute)
-	c.mu.Unlock()
-
-	return nil
+	// Redact via the shared parser, but return a PLAIN error on purpose:
+	// authentication failures must not carry API error classification. A
+	// classified 404/5xx from the identity endpoint would otherwise satisfy
+	// IsNotFound/IsServerError in callers — dropping healthy resources from
+	// state or triggering create recovery for a request that was never sent.
+	apiErr := parseAPIError("GET", "/identity/v1/apikey/exchange", lastStatus, lastBody)
+	return fmt.Errorf("API key exchange failed (HTTP %d): %s", lastStatus, apiErr.Message)
 }
 
 // getToken returns a valid JWT token, refreshing if necessary
 func (c *AnecdotesClient) getToken() (string, error) {
-	c.mu.RLock()
-	if time.Now().Before(c.tokenExp) {
-		token := c.token
-		c.mu.RUnlock()
+	if token, ok := c.cachedToken(); ok {
 		return token, nil
 	}
-	c.mu.RUnlock()
+
+	// Only one goroutine refreshes. The rest queue here and, once through,
+	// find the token another one already fetched.
+	c.refreshMu.Lock()
+	defer c.refreshMu.Unlock()
+
+	if token, ok := c.cachedToken(); ok {
+		return token, nil
+	}
 
 	if err := c.refreshToken(); err != nil {
 		return "", err
@@ -142,6 +179,16 @@ func (c *AnecdotesClient) getToken() (string, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.token, nil
+}
+
+// cachedToken returns the current token when it is still valid.
+func (c *AnecdotesClient) cachedToken() (string, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if time.Now().Before(c.tokenExp) {
+		return c.token, true
+	}
+	return "", false
 }
 
 // isRetryable returns true when a failed request may be safely re-sent.
@@ -159,6 +206,10 @@ func isRetryable(method string, statusCode int) bool {
 
 // maxRetries is the number of retry attempts for retryable errors.
 const maxRetries = 3
+
+// retryBackoffBase scales the wait between retries: 2s, 4s, 6s. It is a
+// variable so tests can shorten it; nothing else reassigns it.
+var retryBackoffBase = 2 * time.Second
 
 // maxRetryAfter bounds how long a Retry-After header may pause the provider.
 // A server asking for a longer wait is honoured up to this limit: Terraform has
@@ -238,7 +289,7 @@ func (c *AnecdotesClient) doRequest(method, path string, body interface{}) ([]by
 				return nil, lastErr
 			}
 			if attempt < maxRetries {
-				time.Sleep(time.Duration(attempt+1) * 2 * time.Second)
+				time.Sleep(time.Duration(attempt+1) * retryBackoffBase)
 				continue
 			}
 			return nil, lastErr
@@ -273,7 +324,7 @@ func (c *AnecdotesClient) doRequest(method, path string, body interface{}) ([]by
 		}
 
 		// Exponential backoff: 2s, 4s, 6s
-		backoff := time.Duration(attempt+1) * 2 * time.Second
+		backoff := time.Duration(attempt+1) * retryBackoffBase
 		// Respect Retry-After header if present (for 429)
 		if resp.StatusCode == 429 {
 			if wait, ok := parseRetryAfter(resp.Header.Get("Retry-After"), time.Now()); ok {
