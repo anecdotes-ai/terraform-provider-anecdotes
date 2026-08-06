@@ -95,6 +95,7 @@ TF_LOG_PROVIDER=DEBUG terraform plan
 | `make fmt` | Format Go code and examples |
 | `make lint` | Run the linter |
 | `make vulncheck` | Scan dependencies for known vulnerabilities |
+| `make release-check` | Validate the GoReleaser configuration |
 | `make docs` | Regenerate documentation |
 | `make clean` | Remove build artifacts |
 

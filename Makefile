@@ -35,6 +35,10 @@ lint:
 vulncheck:
 	go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
 
+.PHONY: release-check
+release-check:
+	go run github.com/goreleaser/goreleaser/v2@v2.17.1 check
+
 .PHONY: fmt
 fmt:
 	gofmt -s -w .
