@@ -6,3 +6,6 @@ contact_links:
   - name: Anecdotes Help Center
     url: https://help.anecdotes.ai
     about: Product help and documentation.
+  - name: Anecdotes Support Ticket
+    url: https://anecdotes.zendesk.com/hc/en-us/requests/new
+    about: For help with your account or the provider, open a ticket directly with Anecdotes Support.

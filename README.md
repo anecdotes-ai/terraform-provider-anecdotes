@@ -182,5 +182,6 @@ This provider is distributed under the [Mozilla Public License 2.0](LICENSE).
 
 ## Support
 
-- [Anecdotes Help Center](https://help.anecdotes.ai)
-- Open an issue at <https://github.com/anecdotes-ai/terraform-provider-anecdotes/issues>
+This provider requires an active Anecdotes customer account, and support is provided through that account. For assistance, see the [Anecdotes Help Center](https://help.anecdotes.ai/) or [open a support ticket](https://anecdotes.zendesk.com/hc/en-us/requests/new).
+
+[GitHub issues](https://github.com/anecdotes-ai/terraform-provider-anecdotes/issues) are welcome for bugs and feature requests, but aren't a substitute for a support ticket.
