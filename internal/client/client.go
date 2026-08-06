@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"mime/multipart"
 	"net/http"
 	"strings"
 	"sync"
@@ -236,91 +235,6 @@ func (c *AnecdotesClient) doRequest(method, path string, body interface{}) ([]by
 		// Exponential backoff: 2s, 4s, 6s
 		backoff := time.Duration(attempt+1) * 2 * time.Second
 		// Respect Retry-After header if present (for 429)
-		if resp.StatusCode == 429 {
-			if ra := resp.Header.Get("Retry-After"); ra != "" {
-				if secs, err := time.ParseDuration(ra + "s"); err == nil {
-					backoff = secs
-				}
-			}
-		}
-		time.Sleep(backoff)
-	}
-
-	return nil, lastErr
-}
-
-// doFormRequest performs an authenticated HTTP request with multipart/form-data body.
-// The Anecdotes compliance API expects FormData (multipart), NOT application/x-www-form-urlencoded.
-// The data map values are strings sent as form fields.
-// Includes retry with exponential backoff, subject to isRetryable.
-func (c *AnecdotesClient) doFormRequest(method, path string, data map[string]string) ([]byte, error) {
-	token, err := c.getToken()
-	if err != nil {
-		return nil, err
-	}
-
-	var lastErr error
-	refreshed401 := false
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		// Rebuild form body on each attempt (reader is consumed)
-		var body bytes.Buffer
-		writer := multipart.NewWriter(&body)
-		for k, v := range data {
-			if err := writer.WriteField(k, v); err != nil {
-				return nil, fmt.Errorf("failed to write form field %s: %w", k, err)
-			}
-		}
-		if err := writer.Close(); err != nil {
-			return nil, fmt.Errorf("failed to close multipart writer: %w", err)
-		}
-
-		req, err := http.NewRequest(method, c.apiURL+path, &body)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create request: %w", err)
-		}
-
-		req.Header.Set("Authorization", "Bearer "+token)
-		req.Header.Set("Content-Type", writer.FormDataContentType())
-
-		resp, err := c.httpClient.Do(req)
-		if err != nil {
-			lastErr = fmt.Errorf("request failed: %w", err)
-			if attempt < maxRetries {
-				time.Sleep(time.Duration(attempt+1) * 2 * time.Second)
-				continue
-			}
-			return nil, lastErr
-		}
-
-		respBody, err := io.ReadAll(resp.Body)
-		_ = resp.Body.Close()
-		if err != nil {
-			return nil, fmt.Errorf("failed to read response body: %w", err)
-		}
-
-		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-			return respBody, nil
-		}
-
-		// A 401 mid-session means the token was revoked or expired before our
-		// time-based refresh window. Force a refresh and retry once.
-		if resp.StatusCode == http.StatusUnauthorized && !refreshed401 {
-			refreshed401 = true
-			if rerr := c.refreshToken(); rerr == nil {
-				if newToken, terr := c.getToken(); terr == nil {
-					token = newToken
-				}
-			}
-			continue
-		}
-
-		lastErr = parseAPIError(method, path, resp.StatusCode, respBody)
-
-		if !isRetryable(method, resp.StatusCode) || attempt >= maxRetries {
-			return nil, lastErr
-		}
-
-		backoff := time.Duration(attempt+1) * 2 * time.Second
 		if resp.StatusCode == 429 {
 			if ra := resp.Header.Get("Retry-After"); ra != "" {
 				if secs, err := time.ParseDuration(ra + "s"); err == nil {
@@ -654,15 +568,6 @@ func (c *AnecdotesClient) UpdateControl(frameworkID, controlID string, control *
 // DeleteControl deletes a control from a framework
 func (c *AnecdotesClient) DeleteControl(frameworkID, controlID string) error {
 	_, err := c.doRequest("DELETE", "/controls/control/"+controlID, nil)
-	return err
-}
-
-// ImportControls imports controls into a framework via bulk import
-func (c *AnecdotesClient) ImportControls(frameworkID string, controls []ControlImport) error {
-	body := map[string]interface{}{
-		"controls": controls,
-	}
-	_, err := c.doRequest("POST", "/api/v1/framework/"+frameworkID+"/controls/import", body)
 	return err
 }
 
@@ -1141,97 +1046,6 @@ func (c *AnecdotesClient) ListEvidences() ([]Evidence, error) {
 	return evidences, nil
 }
 
-// GetAttachmentUploadURL requests a presigned upload URL for evidence file upload.
-// POST /v1/attachments/upload-url (note: NOT under /evidence/v1, uses a separate base path).
-func (c *AnecdotesClient) GetAttachmentUploadURL(filename string, fileSize int64, contentType string) (*AttachmentUploadResponse, error) {
-	reqBody := AttachmentUploadRequest{
-		Context: AttachmentContext{Type: "evidence"},
-		File: AttachmentFile{
-			Filename:    filename,
-			FileSize:    fileSize,
-			ContentType: contentType,
-		},
-	}
-
-	// This endpoint is at /v1/attachments/upload-url (NOT /evidence/v1)
-	respBody, err := c.doRequest("POST", "/v1/attachments/upload-url", reqBody)
-	if err != nil {
-		return nil, err
-	}
-
-	var result AttachmentUploadResponse
-	if err := json.Unmarshal(respBody, &result); err != nil {
-		return nil, fmt.Errorf("failed to parse attachment upload response: %w", err)
-	}
-
-	return &result, nil
-}
-
-// UploadFileToURL uploads raw file bytes to a presigned URL (e.g., GCS).
-func (c *AnecdotesClient) UploadFileToURL(uploadURL string, fileData []byte, contentType string) error {
-	req, err := http.NewRequest("PUT", uploadURL, bytes.NewReader(fileData))
-	if err != nil {
-		return fmt.Errorf("failed to create upload request: %w", err)
-	}
-
-	if contentType != "" {
-		req.Header.Set("Content-Type", contentType)
-	}
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("file upload failed: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		// Do not echo the storage backend's response body (raw XML/HTML).
-		return fmt.Errorf("file upload failed with status %d", resp.StatusCode)
-	}
-
-	return nil
-}
-
-// CreateEvidenceFile creates a new file-type (MANUAL) evidence item via the 3-step upload flow.
-// 1. Get presigned upload URL
-// 2. Upload file to the URL
-// 3. Create evidence record with attachment_id
-func (c *AnecdotesClient) CreateEvidenceFile(evidenceName string, fileData []byte, filename string, contentType string) (string, error) {
-	// Step 1: Get presigned upload URL
-	uploadResp, err := c.GetAttachmentUploadURL(filename, int64(len(fileData)), contentType)
-	if err != nil {
-		return "", fmt.Errorf("failed to get upload URL: %w", err)
-	}
-
-	// Step 2: Upload file to presigned URL
-	if err := c.UploadFileToURL(uploadResp.UploadURL, fileData, contentType); err != nil {
-		return "", fmt.Errorf("failed to upload file: %w", err)
-	}
-
-	// Step 3: Create evidence record with attachment_id
-	formData := map[string]string{
-		"attachment_id":      uploadResp.AttachmentID,
-		"uploaded_to_bucket": "true",
-		"evidence_name":      evidenceName,
-	}
-
-	respBody, err := c.doFormRequest("POST", "/evidence/v1/evidence/manual", formData)
-	if err != nil {
-		return "", fmt.Errorf("failed to create evidence record: %w", err)
-	}
-
-	var result EvidenceCreateResponse
-	if err := json.Unmarshal(respBody, &result); err != nil {
-		return "", fmt.Errorf("failed to parse create evidence response: %w", err)
-	}
-
-	if len(result.EvidenceID) == 0 {
-		return "", fmt.Errorf("create evidence returned empty ID array")
-	}
-
-	return result.EvidenceID[0], nil
-}
-
 // LinkEvidenceToRequirement adds an evidence ID to a requirement's evidence list.
 // Uses read-modify-write: reads current list, appends if missing, PATCHes back.
 // The API uses `requirement_related_evidences` for write and `requirement_evidence_ids` for read.
@@ -1307,28 +1121,6 @@ func (c *AnecdotesClient) GetRequirementEvidenceLink(requirementID, evidenceID s
 	}
 
 	return fmt.Errorf("evidence %s is not linked to requirement %s: %w", evidenceID, requirementID, ErrNotFound)
-}
-
-// GetEvidenceFullData retrieves the full table data for an evidence instance.
-// GET /evidence/v1/evidence/{instance_id}/full_data
-// Returns column-oriented data: {"ColumnName": ["val1", "val2", ...], ...}
-func (c *AnecdotesClient) GetEvidenceFullData(instanceID string) (map[string]interface{}, error) {
-	respBody, err := c.doRequest("GET", "/evidence/v1/evidence/"+instanceID+"/full_data", nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var result map[string]interface{}
-	if err := json.Unmarshal(respBody, &result); err != nil {
-		return nil, fmt.Errorf("failed to parse full data response: %w", err)
-	}
-
-	// Check for error response
-	if errTitle, ok := result["error_title"]; ok {
-		return nil, fmt.Errorf("full data error: %v", errTitle)
-	}
-
-	return result, nil
 }
 
 // GetControlMaturityLevel reads the maturity level from a control.
