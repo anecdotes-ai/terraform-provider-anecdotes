@@ -583,29 +583,10 @@ func (c *AnecdotesClient) ListControls(frameworkID string) ([]Control, error) {
 }
 
 // AddControl adds a single control to a framework.
-// Retries on "nonexistent category" errors (API propagation delay).
 func (c *AnecdotesClient) AddControl(frameworkID string, control *ControlCreateRequest) (*Control, error) {
 	respBody, err := c.doRequest("POST", "/controls/control?control_framework="+frameworkID, control)
 	if err != nil {
-		errMsg := err.Error()
-		// Retry on "nonexistent category" — the category was just created but may not be propagated yet
-		if strings.Contains(errMsg, "nonexistent category") || strings.Contains(errMsg, "nonexistent") {
-			for retry := 0; retry < 3; retry++ {
-				time.Sleep(time.Duration(3+retry*3) * time.Second)
-				respBody, err = c.doRequest("POST", "/controls/control?control_framework="+frameworkID, control)
-				if err == nil {
-					break
-				}
-				if !strings.Contains(err.Error(), "nonexistent") {
-					return nil, err
-				}
-			}
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			return nil, err
-		}
+		return nil, err
 	}
 
 	// The API may return just the control ID as a string
