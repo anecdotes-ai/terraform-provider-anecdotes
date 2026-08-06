@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -159,6 +160,45 @@ func isRetryable(method string, statusCode int) bool {
 // maxRetries is the number of retry attempts for retryable errors.
 const maxRetries = 3
 
+// maxRetryAfter bounds how long a Retry-After header may pause the provider.
+// A server asking for a longer wait is honoured up to this limit: Terraform has
+// no way to report that it is sleeping, so a long pause is indistinguishable
+// from a hang. It is a variable so tests can shorten it; nothing else reassigns it.
+var maxRetryAfter = 60 * time.Second
+
+// parseRetryAfter reads a Retry-After header. RFC 9110 allows two forms and the
+// header is advisory, so an unparseable value reports false and leaves the
+// caller's own backoff in place. The result is capped at maxRetryAfter.
+func parseRetryAfter(value string, now time.Time) (time.Duration, bool) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0, false
+	}
+
+	var wait time.Duration
+	if secs, err := strconv.Atoi(value); err == nil {
+		// delay-seconds
+		wait = time.Duration(secs) * time.Second
+	} else {
+		// HTTP-date
+		at, err := http.ParseTime(value)
+		if err != nil {
+			return 0, false
+		}
+		wait = at.Sub(now)
+	}
+
+	// A negative or zero wait means the server considers the request retryable
+	// now; a date already in the past is the common cause.
+	if wait <= 0 {
+		return 0, false
+	}
+	if wait > maxRetryAfter {
+		wait = maxRetryAfter
+	}
+	return wait, true
+}
+
 // doRequest performs an authenticated HTTP request.
 // It treats 2xx and 304 (Not Modified) as success.
 func (c *AnecdotesClient) doRequest(method, path string, body interface{}) ([]byte, error) {
@@ -236,10 +276,8 @@ func (c *AnecdotesClient) doRequest(method, path string, body interface{}) ([]by
 		backoff := time.Duration(attempt+1) * 2 * time.Second
 		// Respect Retry-After header if present (for 429)
 		if resp.StatusCode == 429 {
-			if ra := resp.Header.Get("Retry-After"); ra != "" {
-				if secs, err := time.ParseDuration(ra + "s"); err == nil {
-					backoff = secs
-				}
+			if wait, ok := parseRetryAfter(resp.Header.Get("Retry-After"), time.Now()); ok {
+				backoff = wait
 			}
 		}
 		time.Sleep(backoff)
