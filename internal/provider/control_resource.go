@@ -276,12 +276,15 @@ func (r *ControlResource) Read(ctx context.Context, req resource.ReadRequest, re
 		data.Owners = types.SetNull(types.StringType)
 	}
 
-	if level, err := r.client.GetControlMaturityLevel(data.ControlID.ValueString()); err == nil {
-		if level == "" {
-			data.MaturityLevel = types.StringNull()
-		} else {
-			data.MaturityLevel = types.StringValue(level)
-		}
+	level, err := r.client.GetControlMaturityLevel(data.ControlID.ValueString())
+	if err != nil {
+		addClientError(&resp.Diagnostics, "read control maturity level", err)
+		return
+	}
+	if level == "" {
+		data.MaturityLevel = types.StringNull()
+	} else {
+		data.MaturityLevel = types.StringValue(level)
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)

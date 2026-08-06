@@ -314,8 +314,13 @@ func (r *FrameworkResource) Update(ctx context.Context, req resource.UpdateReque
 // moveFrameworkFolder moves the framework to toFolderID. The current folder is
 // resolved from the folders list, falling back to the destination.
 func (r *FrameworkResource) moveFrameworkFolder(frameworkID, toFolderID string, diags *diag.Diagnostics) {
+	found, err := r.client.FindFrameworkFolder(frameworkID)
+	if err != nil {
+		addClientError(diags, "resolve the framework's current folder", err)
+		return
+	}
 	fromFolderID := toFolderID
-	if found, err := r.client.FindFrameworkFolder(frameworkID); err == nil && found != "" {
+	if found != "" {
 		fromFolderID = found
 	}
 	if err := r.client.MoveFrameworkFolder(frameworkID, fromFolderID, toFolderID); err != nil {
@@ -389,7 +394,12 @@ func (r *FrameworkResource) setFrameworkState(ctx context.Context, data *Framewo
 	data.Name = types.StringValue(framework.FrameworkName)
 	data.Description = types.StringValue(framework.FrameworkDescription)
 
-	if folderID, err := r.client.FindFrameworkFolder(framework.FrameworkID); err == nil && folderID != "" {
+	folderID, err := r.client.FindFrameworkFolder(framework.FrameworkID)
+	if err != nil {
+		addClientError(d, "read framework folder", err)
+		return
+	}
+	if folderID != "" {
 		data.FolderID = types.StringValue(folderID)
 	}
 
