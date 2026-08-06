@@ -29,7 +29,7 @@ must run without it.
 
 ```bash
 # Unit tests only (no tenant required; TF_ACC unset)
-go test ./...
+go test -race ./...
 
 # Run a single acceptance test
 TF_ACC=1 go test -v -run TestAccFrameworkResource_create -timeout 60m ./internal/provider/
@@ -48,9 +48,13 @@ TF_ACC=1 go test -v -timeout 120m ./internal/provider/
 
 ### Continuous integration
 
-Pull requests run the build, vet, unit tests, lint and the documentation
-check. Acceptance tests are not part of that job — run the full suite locally
+Pull requests run the build, vet, unit tests with the race detector, lint,
+formatting, govulncheck, a release configuration check and the documentation
+check. Acceptance tests are not part of those jobs — run the full suite locally
 before a release.
+
+The acceptance suite runs without `-race`. It is network-bound and runs against
+a live tenant, so it exercises less concurrency than the unit tests do.
 
 ---
 

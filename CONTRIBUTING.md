@@ -23,7 +23,9 @@ agree to uphold it.
 
 ```bash
 make build      # compile the provider
-make test       # unit tests
+make test       # unit tests, with the race detector
+make lint       # golangci-lint
+make vulncheck  # govulncheck against known advisories
 make fmt        # gofmt + terraform fmt
 make docs       # regenerate registry docs (required if you change schemas/examples)
 ```
@@ -47,7 +49,7 @@ descriptions, [`examples/`](examples/), and [`templates/`](templates/). Do not h
 
 1. Fork the repo and create a topic branch.
 2. Make your change, including tests and regenerated docs where relevant.
-3. Run `make fmt test docs` and ensure everything passes.
+3. Run `make fmt test lint vulncheck docs` and ensure everything passes.
 4. **Never commit secrets** — API keys, tokens, or `*.tfvars` with credentials. Use the
    `ANECDOTES_API_KEY` environment variable for local testing.
 5. Open a pull request with a clear description of the change and motivation.

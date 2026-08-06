@@ -21,7 +21,7 @@ install: build
 
 .PHONY: test
 test:
-	go test -v -cover -timeout=120s -parallel=4 ./...
+	go test -race -v -cover -timeout=120s -parallel=4 ./...
 
 .PHONY: testacc
 testacc:
@@ -30,6 +30,14 @@ testacc:
 .PHONY: lint
 lint:
 	golangci-lint run
+
+.PHONY: vulncheck
+vulncheck:
+	go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
+
+.PHONY: release-check
+release-check:
+	go run github.com/goreleaser/goreleaser/v2@v2.17.1 check
 
 .PHONY: fmt
 fmt:

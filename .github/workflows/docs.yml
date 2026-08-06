@@ -33,11 +33,9 @@ jobs:
         with:
           # Let tfplugindocs invoke `terraform fmt` directly.
           terraform_wrapper: false
-      - name: Install tfplugindocs
-        # Installs the exact version pinned in go.mod via tools/tools.go (single
-        # source of truth — no separate hardcoded version to drift).
-        run: go install github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs@v0.25.0
       - name: Generate docs
+        # tfplugindocs runs through `go tool`, at the version recorded by the tool
+        # directive in go.mod.
         env:
           TF_CLI_CONFIG_FILE: ${{ github.workspace }}/.terraformrc.ci
         run: |

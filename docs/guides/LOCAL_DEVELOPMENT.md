@@ -90,10 +90,12 @@ TF_LOG_PROVIDER=DEBUG terraform plan
 |---------|-------------|
 | `make build` | Build the provider binary |
 | `make install` | Build and install into the local plugin directory |
-| `make test` | Run unit tests |
+| `make test` | Run unit tests with the race detector |
 | `make testacc` | Run acceptance tests (requires a live account) |
 | `make fmt` | Format Go code and examples |
 | `make lint` | Run the linter |
+| `make vulncheck` | Scan dependencies for known vulnerabilities |
+| `make release-check` | Validate the GoReleaser configuration |
 | `make docs` | Regenerate documentation |
 | `make clean` | Remove build artifacts |
 
