@@ -28,16 +28,14 @@ func TestParseRetryAfter(t *testing.T) {
 		{"zero means retry now", "0", 0, false},
 		{"negative is ignored", "-5", 0, false},
 
-		// The HTTP-date form is legal and was previously ignored, silently
-		// falling back to the shorter default backoff.
+		// The HTTP-date form is legal.
 		{"http date", "Thu, 06 Aug 2026 12:00:45 GMT", 45 * time.Second, true},
 		{"http date capped", "Thu, 06 Aug 2026 13:00:00 GMT", maxRetryAfter, true},
 		{"http date in the past", "Thu, 06 Aug 2026 11:59:00 GMT", 0, false},
 
 		{"empty", "", 0, false},
 		{"garbage", "soon", 0, false},
-		// Fractional seconds are not delay-seconds. The previous implementation
-		// used ParseDuration(value+"s"), which accepted this.
+		// Fractional seconds are not valid delay-seconds.
 		{"fractional is not a valid delay", "1.5", 0, false},
 	}
 
@@ -89,8 +87,7 @@ func TestDoRequest_RetryAfterIsCapped(t *testing.T) {
 	if attempts != 2 {
 		t.Fatalf("expected one retry, got %d attempts", attempts)
 	}
-	// The server asked for an hour. Anything near the default 2s backoff would
-	// also pass a naive check, so assert against the cap that is actually in force.
+	// The server asked for an hour.
 	if elapsed > time.Second {
 		t.Errorf("waited %v; the Retry-After of 3600s was not capped to %v", elapsed, maxRetryAfter)
 	}

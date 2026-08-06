@@ -25,9 +25,7 @@ type AnecdotesClient struct {
 	tokenExp   time.Time
 	mu         sync.RWMutex
 
-	// Serializes token refreshes. Without it, every goroutine that finds the
-	// token expired exchanges the API key itself, and at Terraform's default
-	// parallelism that is ten simultaneous calls to the identity endpoint.
+	// Serializes token refreshes so concurrent callers exchange the key once.
 	refreshMu sync.Mutex
 
 	// Serializes updates that rewrite a parent object's list.
@@ -89,10 +87,8 @@ func NewAnecdotesClient(apiKey, apiURL string) (*AnecdotesClient, error) {
 	return client, nil
 }
 
-// refreshToken exchanges the API key for a JWT Bearer token. A rate-limited or
-// briefly unavailable identity endpoint is retried: it is a transient fault, and
-// reporting it as an authentication failure sends users to check a key that is
-// perfectly valid.
+// refreshToken exchanges the API key for a JWT Bearer token. Transient
+// failures are retried; a rejected key is not.
 func (c *AnecdotesClient) refreshToken() error {
 	var lastStatus int
 	var lastBody []byte
@@ -163,8 +159,7 @@ func (c *AnecdotesClient) getToken() (string, error) {
 		return token, nil
 	}
 
-	// Only one goroutine refreshes. The rest queue here and, once through,
-	// find the token another one already fetched.
+	// One goroutine refreshes; the rest find the result cached.
 	c.refreshMu.Lock()
 	defer c.refreshMu.Unlock()
 
@@ -207,19 +202,16 @@ func isRetryable(method string, statusCode int) bool {
 // maxRetries is the number of retry attempts for retryable errors.
 const maxRetries = 3
 
-// retryBackoffBase scales the wait between retries: 2s, 4s, 6s. It is a
-// variable so tests can shorten it; nothing else reassigns it.
+// retryBackoffBase scales the wait between retries: 2s, 4s, 6s.
+// A variable so tests can shorten it.
 var retryBackoffBase = 2 * time.Second
 
 // maxRetryAfter bounds how long a Retry-After header may pause the provider.
-// A server asking for a longer wait is honoured up to this limit: Terraform has
-// no way to report that it is sleeping, so a long pause is indistinguishable
-// from a hang. It is a variable so tests can shorten it; nothing else reassigns it.
+// A variable so tests can shorten it.
 var maxRetryAfter = 60 * time.Second
 
-// parseRetryAfter reads a Retry-After header. RFC 9110 allows two forms and the
-// header is advisory, so an unparseable value reports false and leaves the
-// caller's own backoff in place. The result is capped at maxRetryAfter.
+// parseRetryAfter reads a Retry-After header in either form RFC 9110 allows.
+// An unparseable value reports false. The result is capped at maxRetryAfter.
 func parseRetryAfter(value string, now time.Time) (time.Duration, bool) {
 	value = strings.TrimSpace(value)
 	if value == "" {
@@ -239,8 +231,7 @@ func parseRetryAfter(value string, now time.Time) (time.Duration, bool) {
 		wait = at.Sub(now)
 	}
 
-	// A negative or zero wait means the server considers the request retryable
-	// now; a date already in the past is the common cause.
+	// Zero or a past date means retry now.
 	if wait <= 0 {
 		return 0, false
 	}
