@@ -14,8 +14,9 @@ import (
 
 // Generate the provider documentation. The directive lives in the root package so
 // `go generate ./...` runs tfplugindocs from the repository root, where examples/,
-// templates/, and the docs/ output directory live.
-//go:generate tfplugindocs generate --provider-name anecdotes
+// templates/, and the docs/ output directory live. `go tool` runs the version
+// recorded by the tool directive in go.mod.
+//go:generate go tool tfplugindocs generate --provider-name anecdotes
 
 // Provider version - will be set during build
 var version = "dev"

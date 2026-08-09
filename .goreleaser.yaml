@@ -17,7 +17,9 @@ builds:
     flags:
       - -trimpath
     ldflags:
-      - '-s -w -X main.version={{.Version}} -X main.commit={{.Commit}}'
+      # Only main.version is declared in main.go; -X on an undeclared symbol is
+      # silently ignored, so nothing else is passed here.
+      - '-s -w -X main.version={{.Version}}'
     goos:
       - freebsd
       - windows
@@ -34,7 +36,7 @@ builds:
     binary: '{{ .ProjectName }}_v{{ .Version }}'
 
 archives:
-  - format: zip
+  - formats: [zip]
     name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
 
 checksum:

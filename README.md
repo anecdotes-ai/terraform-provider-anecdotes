@@ -137,9 +137,10 @@ level (`frameworks.tf`, `controls.tf`, `requirements.tf`, and so on).
 
 ```bash
 make build      # build the provider binary
-make test       # unit tests (no tenant required)
+make test       # unit tests with the race detector (no tenant required)
 make testacc    # acceptance tests (TF_ACC=1; requires an Anecdotes tenant)
 make lint       # golangci-lint
+make vulncheck  # govulncheck against known advisories
 make fmt        # gofmt + terraform fmt
 make docs       # regenerate docs/ with tfplugindocs
 ```

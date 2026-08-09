@@ -4,11 +4,9 @@ on:
   pull_request:
     branches:
       - main
-      - master
   push:
     branches:
       - main
-      - master
 
 # Cancel superseded runs for the same PR; never cancel runs on the default branch.
 concurrency:
@@ -34,7 +32,8 @@ jobs:
         run: go vet ./...
       - name: Unit tests
         # Acceptance tests are skipped without TF_ACC; they require a live tenant.
-        run: go test ./... -parallel=4
+        # -race guards the concurrent token cache and per-parent locks in the client.
+        run: go test -race ./... -parallel=4
 
   lint:
     name: lint
@@ -49,6 +48,21 @@ jobs:
         with:
           # Pinned for reproducible CI; bump deliberately, not via "latest".
           version: v2.12.2
+
+  goreleaser-check:
+    name: goreleaser-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      # Validates .goreleaser.yaml on every pull request, so a deprecation is
+      # caught here rather than when a release tag is pushed.
+      - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        with:
+          args: check
 
   fmt:
     name: fmt
