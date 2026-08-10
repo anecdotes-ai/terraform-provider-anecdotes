@@ -87,6 +87,14 @@ The API key is exchanged for a JWT Bearer token (valid for 60 minutes, auto-refr
 > and ` + "`terraform apply`" + ` require network access to the Anecdotes API and valid
 > credentials even when no changes are planned. ` + "`terraform validate`" + ` works offline.
 
+## Support
+
+This provider requires an active Anecdotes customer account, and support is provided
+through that account. For assistance, see the [Anecdotes Help Center](https://help.anecdotes.ai/) or
+[open a support ticket](https://anecdotes.zendesk.com/hc/en-us/requests/new).
+
+[GitHub issues](https://github.com/anecdotes-ai/terraform-provider-anecdotes/issues) are welcome for bugs and feature requests, but aren't a substitute for a support ticket.
+
 Example usage is generated from ` + "`examples/provider/provider.tf`" + `.
 `,
 		Attributes: map[string]schema.Attribute{

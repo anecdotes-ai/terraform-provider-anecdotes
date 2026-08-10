@@ -56,8 +56,7 @@ descriptions, [`examples/`](examples/), and [`templates/`](templates/). Do not h
 
 ## Reporting bugs & requesting features
 
-Open a [GitHub issue](../../issues). For security vulnerabilities, follow
-[SECURITY.md](SECURITY.md) instead of filing a public issue.
+Open a [GitHub issue](../../issues) for provider bugs and feature requests. For account or provider help, see [Support](README.md#support). For security vulnerabilities, follow [SECURITY.md](SECURITY.md) instead of filing a public issue.
 
 ## License
 
