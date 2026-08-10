@@ -111,7 +111,7 @@ func (r *ControlCategoryResource) Create(ctx context.Context, req resource.Creat
 	}
 
 	// Call API to create category
-	category, err := r.client.CreateControlCategory(createReq)
+	category, err := r.client.CreateControlCategory(ctx, createReq)
 	if err != nil {
 		addClientError(&resp.Diagnostics, "create control category", err)
 		return
@@ -132,7 +132,7 @@ func (r *ControlCategoryResource) Read(ctx context.Context, req resource.ReadReq
 	}
 
 	// Get category from API
-	category, err := r.client.GetControlCategory(data.CategoryID.ValueString())
+	category, err := r.client.GetControlCategory(ctx, data.CategoryID.ValueString())
 	if err != nil {
 		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
@@ -163,7 +163,7 @@ func (r *ControlCategoryResource) Update(ctx context.Context, req resource.Updat
 	}
 
 	// Call API to update category
-	err := r.client.UpdateControlCategory(data.CategoryID.ValueString(), updateReq)
+	err := r.client.UpdateControlCategory(ctx, data.CategoryID.ValueString(), updateReq)
 	if err != nil {
 		addClientError(&resp.Diagnostics, "update control category", err)
 		return
@@ -180,7 +180,7 @@ func (r *ControlCategoryResource) Delete(ctx context.Context, req resource.Delet
 		return
 	}
 
-	err := r.client.DeleteControlCategory(data.CategoryID.ValueString())
+	err := r.client.DeleteControlCategory(ctx, data.CategoryID.ValueString())
 	if err != nil && !client.IsNotFound(err) {
 		addClientError(&resp.Diagnostics, "delete control category", err)
 		return

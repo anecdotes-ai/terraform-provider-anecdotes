@@ -102,7 +102,7 @@ func (r *MappingRequirementEvidenceResource) Create(ctx context.Context, req res
 	requirementID := data.RequirementID.ValueString()
 	evidenceID := data.EvidenceID.ValueString()
 
-	if err := r.client.LinkEvidenceToRequirement(requirementID, evidenceID); err != nil {
+	if err := r.client.LinkEvidenceToRequirement(ctx, requirementID, evidenceID); err != nil {
 		addClientError(&resp.Diagnostics, fmt.Sprintf("link evidence %s to requirement %s", evidenceID, requirementID), err)
 		return
 	}
@@ -120,7 +120,7 @@ func (r *MappingRequirementEvidenceResource) Read(ctx context.Context, req resou
 	requirementID := data.RequirementID.ValueString()
 	evidenceID := data.EvidenceID.ValueString()
 
-	if err := r.client.GetRequirementEvidenceLink(requirementID, evidenceID); err != nil {
+	if err := r.client.GetRequirementEvidenceLink(ctx, requirementID, evidenceID); err != nil {
 		if client.IsNotFound(err) {
 			// Link no longer exists — remove from state
 			resp.State.RemoveResource(ctx)
@@ -153,7 +153,7 @@ func (r *MappingRequirementEvidenceResource) Delete(ctx context.Context, req res
 	requirementID := data.RequirementID.ValueString()
 	evidenceID := data.EvidenceID.ValueString()
 
-	if err := r.client.UnlinkEvidenceFromRequirement(requirementID, evidenceID); err != nil {
+	if err := r.client.UnlinkEvidenceFromRequirement(ctx, requirementID, evidenceID); err != nil {
 		addClientError(&resp.Diagnostics, fmt.Sprintf("unlink evidence %s from requirement %s", evidenceID, requirementID), err)
 		return
 	}

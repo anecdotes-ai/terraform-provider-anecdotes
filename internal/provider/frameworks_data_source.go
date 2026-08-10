@@ -156,7 +156,7 @@ func (d *FrameworksDataSource) Read(ctx context.Context, req datasource.ReadRequ
 	}
 
 	// Fetch all frameworks from API
-	allFrameworks, err := d.client.ListFrameworks()
+	allFrameworks, err := d.client.ListFrameworks(ctx)
 	if err != nil {
 		addClientError(&resp.Diagnostics, "list frameworks", err)
 		return

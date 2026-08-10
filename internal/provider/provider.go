@@ -9,6 +9,7 @@ import (
 
 	"github.com/anecdotes-ai/terraform-provider-anecdotes/internal/client"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -124,9 +125,32 @@ func (p *AnecdotesProvider) Configure(ctx context.Context, req provider.Configur
 		return
 	}
 
+	// Values that are not known until apply cannot configure a client.
+	if config.APIKey.IsUnknown() {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("api_key"),
+			"Unknown API Key",
+			"The Anecdotes API key is not known until apply, so the provider cannot "+
+				"authenticate yet. Apply the resource it depends on first, set the value "+
+				"statically, or use the ANECDOTES_API_KEY environment variable.",
+		)
+	}
+	if config.APIURL.IsUnknown() {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("api_url"),
+			"Unknown API URL",
+			"The Anecdotes API URL is not known until apply. Apply the resource it "+
+				"depends on first, set the value statically, or use the ANECDOTES_API_URL "+
+				"environment variable.",
+		)
+	}
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	// Get API key from config or environment variable
 	apiKey := config.APIKey.ValueString()
-	if config.APIKey.IsNull() || config.APIKey.IsUnknown() || apiKey == "" {
+	if config.APIKey.IsNull() || apiKey == "" {
 		apiKey = os.Getenv("ANECDOTES_API_KEY")
 	}
 
@@ -141,7 +165,7 @@ func (p *AnecdotesProvider) Configure(ctx context.Context, req provider.Configur
 
 	// Get API base URL from config or environment variable, with default fallback
 	apiURL := config.APIURL.ValueString()
-	if config.APIURL.IsNull() || config.APIURL.IsUnknown() || apiURL == "" {
+	if config.APIURL.IsNull() || apiURL == "" {
 		apiURL = os.Getenv("ANECDOTES_API_URL")
 	}
 	if apiURL == "" {
@@ -156,7 +180,7 @@ func (p *AnecdotesProvider) Configure(ctx context.Context, req provider.Configur
 	}
 
 	// Create API client
-	apiClient, err := client.NewAnecdotesClient(apiKey, apiURL)
+	apiClient, err := client.NewAnecdotesClient(ctx, apiKey, apiURL)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to Create Anecdotes API Client",

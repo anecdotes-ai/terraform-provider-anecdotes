@@ -4,6 +4,7 @@
 package client
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -27,7 +28,7 @@ func TestGetRequirement_ResolvesStatusName(t *testing.T) {
 	defer srv.Close()
 
 	c := newTestClient(t, srv)
-	req, err := c.GetRequirement("r1")
+	req, err := c.GetRequirement(context.Background(), "r1")
 	if err != nil {
 		t.Fatalf("GetRequirement: %v", err)
 	}
@@ -60,7 +61,7 @@ func TestGetRequirement_NoStatusIDLeavesEmpty(t *testing.T) {
 	defer srv.Close()
 
 	c := newTestClient(t, srv)
-	req, err := c.GetRequirement("r1")
+	req, err := c.GetRequirement(context.Background(), "r1")
 	if err != nil {
 		t.Fatalf("GetRequirement: %v", err)
 	}

@@ -149,7 +149,7 @@ func (d *RequirementsDataSource) Read(ctx context.Context, req datasource.ReadRe
 		return
 	}
 
-	allRequirements, err := d.client.ListRequirements()
+	allRequirements, err := d.client.ListRequirements(ctx)
 	if err != nil {
 		addClientError(&resp.Diagnostics, "list requirements", err)
 		return

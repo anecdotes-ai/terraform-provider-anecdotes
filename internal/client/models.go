@@ -375,16 +375,6 @@ type RequirementUpdateRequest struct {
 	RequirementScopingOverrides  map[string]interface{} `json:"requirement_scoping_overrides,omitempty"`
 }
 
-// ControlImport represents a control to be imported via CSV/bulk import
-type ControlImport struct {
-	Category              string            `json:"category"`
-	ControlName           string            `json:"control_name"`
-	ControlDescription    string            `json:"control_description,omitempty"`
-	Tags                  []string          `json:"tags,omitempty"`
-	CommonControlMappings []string          `json:"common_control_mappings,omitempty"`
-	CustomFields          map[string]string `json:"custom_fields,omitempty"`
-}
-
 // Folder represents a folder for organizing frameworks
 type Folder struct {
 	ID             string   `json:"id"`
@@ -501,11 +491,4 @@ type AttachmentFile struct {
 	Filename    string `json:"filename"`
 	FileSize    int64  `json:"file_size"`
 	ContentType string `json:"content_type"`
-}
-
-// AttachmentUploadResponse represents the response from POST /v1/attachments/upload-url.
-type AttachmentUploadResponse struct {
-	AttachmentID string `json:"attachment_id"`
-	UploadURL    string `json:"upload_url"`
-	ExpiresAt    string `json:"expires_at"`
 }

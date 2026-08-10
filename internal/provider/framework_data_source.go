@@ -276,7 +276,7 @@ func (d *FrameworkDataSource) Read(ctx context.Context, req datasource.ReadReque
 	}
 
 	// Get framework from API
-	framework, err := d.client.GetFramework(data.FrameworkID.ValueString())
+	framework, err := d.client.GetFramework(ctx, data.FrameworkID.ValueString())
 	if err != nil {
 		addClientError(&resp.Diagnostics, "read framework", err)
 		return

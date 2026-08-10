@@ -106,7 +106,7 @@ func (d *FrameworkFoldersDataSource) Read(ctx context.Context, req datasource.Re
 		return
 	}
 
-	allFolders, err := d.client.ListFolders()
+	allFolders, err := d.client.ListFolders(ctx)
 	if err != nil {
 		addClientError(&resp.Diagnostics, "list folders", err)
 		return

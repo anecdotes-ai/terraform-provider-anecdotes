@@ -4,6 +4,7 @@
 package client
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -208,7 +209,7 @@ func TestAPIError_Classifiers(t *testing.T) {
 // token exchange.
 func newTestClient(t *testing.T, srv *httptest.Server) *AnecdotesClient {
 	t.Helper()
-	c, err := NewAnecdotesClient("test-key", srv.URL)
+	c, err := NewAnecdotesClient(context.Background(), "test-key", srv.URL)
 	if err != nil {
 		t.Fatalf("NewAnecdotesClient: %v", err)
 	}
@@ -227,7 +228,7 @@ func TestDoRequest_ReturnsClassifiedAPIError(t *testing.T) {
 	defer srv.Close()
 
 	c := newTestClient(t, srv)
-	_, err := c.doRequest("POST", "/framework/v1/framework", map[string]string{})
+	_, err := c.doRequest(context.Background(), "POST", "/framework/v1/framework", map[string]string{})
 	apiErr, ok := AsAPIError(err)
 	if !ok {
 		t.Fatalf("expected *APIError, got %T: %v", err, err)
@@ -258,7 +259,7 @@ func TestDoRequest_401RefreshesAndRetries(t *testing.T) {
 	defer srv.Close()
 
 	c := newTestClient(t, srv)
-	if _, err := c.doRequest("GET", "/api/v1/framework", nil); err != nil {
+	if _, err := c.doRequest(context.Background(), "GET", "/api/v1/framework", nil); err != nil {
 		t.Fatalf("expected success after 401 refresh, got %v", err)
 	}
 	if got := atomic.LoadInt32(&exchanges); got < 2 {
@@ -283,7 +284,7 @@ func TestDoRequest_PersistentNon2xxIsNotInfiniteLoop(t *testing.T) {
 	defer srv.Close()
 
 	c := newTestClient(t, srv)
-	_, err := c.doRequest("GET", "/api/v1/framework/x", nil)
+	_, err := c.doRequest(context.Background(), "GET", "/api/v1/framework/x", nil)
 	apiErr, ok := AsAPIError(err)
 	if !ok || !apiErr.IsNotFound() {
 		t.Fatalf("expected not-found APIError, got %T: %v", err, err)
@@ -299,6 +300,8 @@ func TestDoRequest_PersistentNon2xxIsNotInfiniteLoop(t *testing.T) {
 // otherwise satisfy IsNotFound/IsServerError and trigger state-drop or create
 // recovery for a request that was never sent.
 func TestTokenRefreshErrors_DoNotClassify(t *testing.T) {
+	// A 500 here is retried; keep the waits short.
+	shortenRetryBackoff(t)
 	for _, status := range []int{404, 500} {
 		var exchangeFails atomic.Bool
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -321,7 +324,7 @@ func TestTokenRefreshErrors_DoNotClassify(t *testing.T) {
 		c.tokenExp = time.Time{}
 		c.mu.Unlock()
 
-		_, err := c.ListFrameworks()
+		_, err := c.ListFrameworks(context.Background())
 		if err == nil {
 			t.Fatalf("status %d: expected an error from the failed refresh", status)
 		}

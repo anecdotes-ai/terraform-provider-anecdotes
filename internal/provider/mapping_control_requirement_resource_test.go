@@ -4,6 +4,7 @@
 package provider
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
@@ -116,7 +117,7 @@ func testCheckControlRequirementCount(t *testing.T, resourceName string, want in
 		if err != nil {
 			return err
 		}
-		control, err := testAccNewClient(t).GetControl(frameworkID, controlID)
+		control, err := testAccNewClient(t).GetControl(context.Background(), frameworkID, controlID)
 		if err != nil {
 			return fmt.Errorf("reading control %s: %w", controlID, err)
 		}

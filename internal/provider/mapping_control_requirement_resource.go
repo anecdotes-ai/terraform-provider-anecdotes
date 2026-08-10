@@ -107,7 +107,7 @@ func (r *MappingControlRequirementResource) Create(ctx context.Context, req reso
 	controlID := data.ControlID.ValueString()
 	requirementID := data.RequirementID.ValueString()
 
-	link, err := r.client.LinkRequirementToControl(controlID, requirementID)
+	link, err := r.client.LinkRequirementToControl(ctx, controlID, requirementID)
 	if err != nil {
 		addClientError(&resp.Diagnostics, "link requirement to control", err)
 		return
@@ -131,7 +131,7 @@ func (r *MappingControlRequirementResource) Read(ctx context.Context, req resour
 	controlID := data.ControlID.ValueString()
 	requirementID := data.RequirementID.ValueString()
 
-	link, err := r.client.GetControlRequirementLink(controlID, requirementID)
+	link, err := r.client.GetControlRequirementLink(ctx, controlID, requirementID)
 	if err != nil {
 		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
@@ -170,7 +170,7 @@ func (r *MappingControlRequirementResource) Delete(ctx context.Context, req reso
 	controlID := data.ControlID.ValueString()
 	requirementID := data.RequirementID.ValueString()
 
-	err := r.client.UnlinkRequirementFromControl(controlID, requirementID)
+	err := r.client.UnlinkRequirementFromControl(ctx, controlID, requirementID)
 	if err != nil {
 		addClientError(&resp.Diagnostics, "unlink requirement from control", err)
 		return

@@ -111,7 +111,7 @@ func (r *FrameworkFolderResource) Create(ctx context.Context, req resource.Creat
 		FrameworksList: []string{},
 	}
 
-	folder, err := r.client.CreateFolder(folderReq)
+	folder, err := r.client.CreateFolder(ctx, folderReq)
 	if err != nil {
 		addClientError(&resp.Diagnostics, "create folder", err)
 		return
@@ -140,7 +140,7 @@ func (r *FrameworkFolderResource) Read(ctx context.Context, req resource.ReadReq
 		return
 	}
 
-	folder, err := r.client.GetFolder(state.FolderID.ValueString())
+	folder, err := r.client.GetFolder(ctx, state.FolderID.ValueString())
 	if err != nil {
 		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
@@ -174,7 +174,7 @@ func (r *FrameworkFolderResource) Update(ctx context.Context, req resource.Updat
 		Name: plan.Name.ValueString(),
 	}
 
-	folder, err := r.client.UpdateFolder(state.FolderID.ValueString(), folderReq)
+	folder, err := r.client.UpdateFolder(ctx, state.FolderID.ValueString(), folderReq)
 	if err != nil {
 		addClientError(&resp.Diagnostics, "update folder", err)
 		return
@@ -196,7 +196,7 @@ func (r *FrameworkFolderResource) Delete(ctx context.Context, req resource.Delet
 		return
 	}
 
-	err := r.client.DeleteFolder(state.FolderID.ValueString())
+	err := r.client.DeleteFolder(ctx, state.FolderID.ValueString())
 	if err != nil && !client.IsNotFound(err) {
 		addClientError(&resp.Diagnostics, "delete folder", err)
 		return

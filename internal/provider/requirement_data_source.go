@@ -107,7 +107,7 @@ func (d *RequirementDataSource) Read(ctx context.Context, req datasource.ReadReq
 	requirementID := data.RequirementID.ValueString()
 
 	// Get requirement from API
-	requirement, err := d.client.GetRequirement(requirementID)
+	requirement, err := d.client.GetRequirement(ctx, requirementID)
 	if err != nil {
 		addClientError(&resp.Diagnostics, fmt.Sprintf("read requirement with ID %s", requirementID), err)
 		return

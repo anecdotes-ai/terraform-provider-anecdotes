@@ -176,7 +176,7 @@ func (r *ControlResource) Create(ctx context.Context, req resource.CreateRequest
 	}
 
 	// Get category details to get the name
-	category, err := r.client.GetControlCategory(data.CategoryID.ValueString())
+	category, err := r.client.GetControlCategory(ctx, data.CategoryID.ValueString())
 	if err != nil {
 		addClientError(&resp.Diagnostics, "get control category", err)
 		return
@@ -201,7 +201,7 @@ func (r *ControlResource) Create(ctx context.Context, req resource.CreateRequest
 	}
 
 	// Call API
-	control, err := r.client.AddControl(data.FrameworkID.ValueString(), createReq)
+	control, err := r.client.AddControl(ctx, data.FrameworkID.ValueString(), createReq)
 	if err != nil {
 		addClientError(&resp.Diagnostics, "create control", err)
 		return
@@ -211,7 +211,7 @@ func (r *ControlResource) Create(ctx context.Context, req resource.CreateRequest
 
 	// Set maturity level if user specified it (separate API call)
 	if !data.MaturityLevel.IsNull() && !data.MaturityLevel.IsUnknown() {
-		if err := r.client.SetControlMaturityLevel(control.ControlID, data.MaturityLevel.ValueString()); err != nil {
+		if err := r.client.SetControlMaturityLevel(ctx, control.ControlID, data.MaturityLevel.ValueString()); err != nil {
 			// The control exists on the platform — persist it in state (as
 			// tainted) before erroring, so the next apply does not create a
 			// duplicate.
@@ -234,7 +234,7 @@ func (r *ControlResource) Read(ctx context.Context, req resource.ReadRequest, re
 	}
 
 	// Get control from API
-	control, err := r.client.GetControl(data.FrameworkID.ValueString(), data.ControlID.ValueString())
+	control, err := r.client.GetControl(ctx, data.FrameworkID.ValueString(), data.ControlID.ValueString())
 	if err != nil {
 		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
@@ -276,12 +276,15 @@ func (r *ControlResource) Read(ctx context.Context, req resource.ReadRequest, re
 		data.Owners = types.SetNull(types.StringType)
 	}
 
-	if level, err := r.client.GetControlMaturityLevel(data.ControlID.ValueString()); err == nil {
-		if level == "" {
-			data.MaturityLevel = types.StringNull()
-		} else {
-			data.MaturityLevel = types.StringValue(level)
-		}
+	level, err := r.client.GetControlMaturityLevel(ctx, data.ControlID.ValueString())
+	if err != nil {
+		addClientError(&resp.Diagnostics, "read control maturity level", err)
+		return
+	}
+	if level == "" {
+		data.MaturityLevel = types.StringNull()
+	} else {
+		data.MaturityLevel = types.StringValue(level)
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -296,7 +299,7 @@ func (r *ControlResource) Update(ctx context.Context, req resource.UpdateRequest
 	}
 
 	// Get category details to get the name
-	category, err := r.client.GetControlCategory(data.CategoryID.ValueString())
+	category, err := r.client.GetControlCategory(ctx, data.CategoryID.ValueString())
 	if err != nil {
 		addClientError(&resp.Diagnostics, "get control category", err)
 		return
@@ -321,18 +324,18 @@ func (r *ControlResource) Update(ctx context.Context, req resource.UpdateRequest
 	}
 
 	// Call API
-	if _, err := r.client.UpdateControl(data.FrameworkID.ValueString(), data.ControlID.ValueString(), updateReq); err != nil {
+	if _, err := r.client.UpdateControl(ctx, data.FrameworkID.ValueString(), data.ControlID.ValueString(), updateReq); err != nil {
 		addClientError(&resp.Diagnostics, "update control", err)
 		return
 	}
 
-	if err := r.client.SetControlOwners(data.ControlID.ValueString(), owners); err != nil {
+	if err := r.client.SetControlOwners(ctx, data.ControlID.ValueString(), owners); err != nil {
 		addClientError(&resp.Diagnostics, "set control owners", err)
 		return
 	}
 
 	// An absent attribute clears the maturity level.
-	if err := r.client.SetControlMaturityLevel(data.ControlID.ValueString(), data.MaturityLevel.ValueString()); err != nil {
+	if err := r.client.SetControlMaturityLevel(ctx, data.ControlID.ValueString(), data.MaturityLevel.ValueString()); err != nil {
 		addClientError(&resp.Diagnostics, "set control maturity level", err)
 		return
 	}
@@ -348,7 +351,7 @@ func (r *ControlResource) Delete(ctx context.Context, req resource.DeleteRequest
 		return
 	}
 
-	err := r.client.DeleteControl(data.FrameworkID.ValueString(), data.ControlID.ValueString())
+	err := r.client.DeleteControl(ctx, data.FrameworkID.ValueString(), data.ControlID.ValueString())
 	if err != nil && !client.IsNotFound(err) {
 		addClientError(&resp.Diagnostics, "delete control", err)
 		return

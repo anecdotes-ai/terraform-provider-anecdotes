@@ -4,6 +4,7 @@
 package client
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -31,7 +32,7 @@ func TestGetControlRequirementLink_NotLinkedIsNotFound(t *testing.T) {
 	defer srv.Close()
 
 	c := newTestClient(t, srv)
-	_, err := c.GetControlRequirementLink("c1", "r1")
+	_, err := c.GetControlRequirementLink(context.Background(), "c1", "r1")
 	if err == nil {
 		t.Fatal("expected an error for an unlinked requirement")
 	}
@@ -52,7 +53,7 @@ func TestGetControlRequirementLink_ParentMissingIsNotFound(t *testing.T) {
 	defer srv.Close()
 
 	c := newTestClient(t, srv)
-	_, err := c.GetControlRequirementLink("c_gone", "r1")
+	_, err := c.GetControlRequirementLink(context.Background(), "c_gone", "r1")
 	if !IsNotFound(err) {
 		t.Errorf("missing parent control should satisfy IsNotFound, got: %v", err)
 	}
@@ -71,7 +72,7 @@ func TestGetControlRequirementLink_ServerErrorIsNotNotFound(t *testing.T) {
 	defer srv.Close()
 
 	c := newTestClient(t, srv)
-	_, err := c.GetControlRequirementLink("c1", "r1")
+	_, err := c.GetControlRequirementLink(context.Background(), "c1", "r1")
 	if err == nil {
 		t.Fatal("expected an error on server failure")
 	}
@@ -94,7 +95,7 @@ func TestGetRequirementEvidenceLink_NotLinkedIsNotFound(t *testing.T) {
 	defer srv.Close()
 
 	c := newTestClient(t, srv)
-	err := c.GetRequirementEvidenceLink("r1", "ev1")
+	err := c.GetRequirementEvidenceLink(context.Background(), "r1", "ev1")
 	if err == nil {
 		t.Fatal("expected an error for an unlinked evidence")
 	}
@@ -117,7 +118,7 @@ func TestGetRequirementEvidenceLink_ServerErrorIsNotNotFound(t *testing.T) {
 	defer srv.Close()
 
 	c := newTestClient(t, srv)
-	err := c.GetRequirementEvidenceLink("r1", "ev1")
+	err := c.GetRequirementEvidenceLink(context.Background(), "r1", "ev1")
 	if err == nil {
 		t.Fatal("expected an error on server failure")
 	}
@@ -138,7 +139,7 @@ func TestGetRequirementEvidenceLink_ParentMissingIsNotFound(t *testing.T) {
 	defer srv.Close()
 
 	c := newTestClient(t, srv)
-	err := c.GetRequirementEvidenceLink("r_gone", "ev1")
+	err := c.GetRequirementEvidenceLink(context.Background(), "r_gone", "ev1")
 	if !IsNotFound(err) {
 		t.Errorf("missing parent requirement should satisfy IsNotFound, got: %v", err)
 	}
@@ -193,7 +194,7 @@ func TestLinkRequirementToControl_ConcurrentLinksAllSurvive(t *testing.T) {
 		wg.Add(1)
 		go func(requirementID string) {
 			defer wg.Done()
-			if _, err := c.LinkRequirementToControl("c1", requirementID); err != nil {
+			if _, err := c.LinkRequirementToControl(context.Background(), "c1", requirementID); err != nil {
 				t.Errorf("link %s failed: %v", requirementID, err)
 			}
 		}(id)
@@ -266,7 +267,7 @@ func TestLinkEvidenceToRequirement_ConcurrentLinksAllSurvive(t *testing.T) {
 		wg.Add(1)
 		go func(evidenceID string) {
 			defer wg.Done()
-			if err := c.LinkEvidenceToRequirement("req1", evidenceID); err != nil {
+			if err := c.LinkEvidenceToRequirement(context.Background(), "req1", evidenceID); err != nil {
 				t.Errorf("link %s failed: %v", evidenceID, err)
 			}
 		}(id)

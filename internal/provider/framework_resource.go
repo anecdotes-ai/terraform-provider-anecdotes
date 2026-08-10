@@ -208,7 +208,7 @@ func (r *FrameworkResource) Create(ctx context.Context, req resource.CreateReque
 	}
 
 	// Create ignores auditor configuration; it is applied afterward.
-	framework, err := r.client.CreateFramework(&client.FrameworkCreateRequest{
+	framework, err := r.client.CreateFramework(ctx, &client.FrameworkCreateRequest{
 		FrameworkName:        data.Name.ValueString(),
 		FrameworkDescription: data.Description.ValueString(),
 		FolderID:             data.FolderID.ValueString(),
@@ -228,7 +228,7 @@ func (r *FrameworkResource) Create(ctx context.Context, req resource.CreateReque
 		return
 	}
 
-	framework, err = r.client.GetFramework(framework.FrameworkID)
+	framework, err = r.client.GetFramework(ctx, framework.FrameworkID)
 	if err != nil {
 		addClientError(&resp.Diagnostics, "read framework after create", err)
 		return
@@ -253,7 +253,7 @@ func (r *FrameworkResource) Read(ctx context.Context, req resource.ReadRequest, 
 	}
 
 	// Get framework from API
-	framework, err := r.client.GetFramework(data.FrameworkID.ValueString())
+	framework, err := r.client.GetFramework(ctx, data.FrameworkID.ValueString())
 	if err != nil {
 		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
@@ -284,7 +284,7 @@ func (r *FrameworkResource) Update(ctx context.Context, req resource.UpdateReque
 	}
 
 	if data.FolderID.ValueString() != state.FolderID.ValueString() {
-		r.moveFrameworkFolder(data.FrameworkID.ValueString(), data.FolderID.ValueString(), &resp.Diagnostics)
+		r.moveFrameworkFolder(ctx, data.FrameworkID.ValueString(), data.FolderID.ValueString(), &resp.Diagnostics)
 		if resp.Diagnostics.HasError() {
 			return
 		}
@@ -295,7 +295,7 @@ func (r *FrameworkResource) Update(ctx context.Context, req resource.UpdateReque
 		return
 	}
 
-	framework, err := r.client.GetFramework(data.FrameworkID.ValueString())
+	framework, err := r.client.GetFramework(ctx, data.FrameworkID.ValueString())
 	if err != nil {
 		addClientError(&resp.Diagnostics, "read framework after update", err)
 		return
@@ -313,12 +313,17 @@ func (r *FrameworkResource) Update(ctx context.Context, req resource.UpdateReque
 
 // moveFrameworkFolder moves the framework to toFolderID. The current folder is
 // resolved from the folders list, falling back to the destination.
-func (r *FrameworkResource) moveFrameworkFolder(frameworkID, toFolderID string, diags *diag.Diagnostics) {
+func (r *FrameworkResource) moveFrameworkFolder(ctx context.Context, frameworkID, toFolderID string, diags *diag.Diagnostics) {
+	found, err := r.client.FindFrameworkFolder(ctx, frameworkID)
+	if err != nil {
+		addClientError(diags, "resolve the framework's current folder", err)
+		return
+	}
 	fromFolderID := toFolderID
-	if found, err := r.client.FindFrameworkFolder(frameworkID); err == nil && found != "" {
+	if found != "" {
 		fromFolderID = found
 	}
-	if err := r.client.MoveFrameworkFolder(frameworkID, fromFolderID, toFolderID); err != nil {
+	if err := r.client.MoveFrameworkFolder(ctx, frameworkID, fromFolderID, toFolderID); err != nil {
 		addClientError(diags, "move framework to folder", err)
 	}
 }
@@ -336,7 +341,7 @@ func (r *FrameworkResource) configureFrameworkAuditing(ctx context.Context, fram
 		CanAuditorViewSoaReport:           optionalBoolPtr(data.CanAuditorViewSoaReport),
 		CanAuditorViewTags:                optionalBoolPtr(data.CanAuditorViewTags),
 	}
-	if _, err := r.client.UpdateFramework(frameworkID, patchReq); err != nil {
+	if _, err := r.client.UpdateFramework(ctx, frameworkID, patchReq); err != nil {
 		addClientError(diags, "configure framework", err)
 		return
 	}
@@ -346,7 +351,7 @@ func (r *FrameworkResource) configureFrameworkAuditing(ctx context.Context, fram
 		if diags.HasError() {
 			return
 		}
-		if err := r.client.SetFrameworkAuditorControlStatus(frameworkID, status); err != nil {
+		if err := r.client.SetFrameworkAuditorControlStatus(ctx, frameworkID, status); err != nil {
 			addClientError(diags, "set framework auditor control statuses", err)
 			return
 		}
@@ -357,7 +362,7 @@ func (r *FrameworkResource) configureFrameworkAuditing(ctx context.Context, fram
 		if diags.HasError() {
 			return
 		}
-		if err := r.client.SetFrameworkAuditorEvidenceStatus(frameworkID, status); err != nil {
+		if err := r.client.SetFrameworkAuditorEvidenceStatus(ctx, frameworkID, status); err != nil {
 			addClientError(diags, "set framework auditor evidence statuses", err)
 			return
 		}
@@ -372,7 +377,7 @@ func (r *FrameworkResource) Delete(ctx context.Context, req resource.DeleteReque
 		return
 	}
 
-	err := r.client.DeleteFramework(data.FrameworkID.ValueString())
+	err := r.client.DeleteFramework(ctx, data.FrameworkID.ValueString())
 	if err != nil && !client.IsNotFound(err) {
 		addClientError(&resp.Diagnostics, "delete framework", err)
 		return
@@ -389,7 +394,12 @@ func (r *FrameworkResource) setFrameworkState(ctx context.Context, data *Framewo
 	data.Name = types.StringValue(framework.FrameworkName)
 	data.Description = types.StringValue(framework.FrameworkDescription)
 
-	if folderID, err := r.client.FindFrameworkFolder(framework.FrameworkID); err == nil && folderID != "" {
+	folderID, err := r.client.FindFrameworkFolder(ctx, framework.FrameworkID)
+	if err != nil {
+		addClientError(d, "read framework folder", err)
+		return
+	}
+	if folderID != "" {
 		data.FolderID = types.StringValue(folderID)
 	}
 

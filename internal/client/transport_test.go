@@ -4,6 +4,7 @@
 package client
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -29,7 +30,7 @@ func TestClient_RefusesRedirects(t *testing.T) {
 	}))
 	defer origin.Close()
 
-	_, err := NewAnecdotesClient("test-key", origin.URL)
+	_, err := NewAnecdotesClient(context.Background(), "test-key", origin.URL)
 	if err == nil {
 		t.Fatal("expected the client to refuse the redirect, got no error")
 	}
@@ -58,7 +59,7 @@ func TestClient_RefusesRedirectsOnAPICalls(t *testing.T) {
 	defer srv.Close()
 
 	c := newTestClient(t, srv)
-	if _, err := c.ListFrameworks(); err == nil {
+	if _, err := c.ListFrameworks(context.Background()); err == nil {
 		t.Fatal("expected the redirect to fail the call, got no error")
 	}
 }
