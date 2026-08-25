@@ -44,7 +44,11 @@ $ terraform plan -detailed-exitcode
 ```
 
 Deletions are detected as well: an object removed in the application is
-re-created by the next apply.
+re-created by the next apply. This includes an `anecdotes_requirement_view`
+whose parent `anecdotes_requirement` was deleted — the platform cascades the
+delete to every view beneath it, so the view disappears too even though nothing
+targeted it directly; the next `terraform plan` shows it needing to be created
+again.
 
 ## Absorbing a change made in the application
 

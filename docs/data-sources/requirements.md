@@ -52,6 +52,8 @@ Read-Only:
 - `description` (String) The description of the requirement.
 - `is_custom` (Boolean) Whether this is a custom requirement.
 - `name` (String) The name of the requirement.
+- `parent_id` (String) The ID of the parent requirement, if this requirement is a Requirement View. Empty for a standalone requirement.
 - `requirement_id` (String) The unique identifier of the requirement.
 - `status` (String) The requirement status.
 - `status_name` (String) The human-readable status name.
+- `view_name` (String) The name of the Requirement View, if this requirement is one. Empty for a standalone requirement.
