@@ -507,3 +507,120 @@ resource "anecdotes_requirement" "test" {
 		},
 	})
 }
+
+// TestAccDrift_RequirementViewNameRevert: an out-of-band change to view_name
+// (Terraform-owned) must surface as drift and be reverted by the next apply.
+func TestAccDrift_RequirementViewNameRevert(t *testing.T) {
+	parentName := randomName("req-view-drift-parent")
+	viewName := randomName("req-view-drift")
+	config := fmt.Sprintf(`
+resource "anecdotes_requirement" "parent" {
+  name        = %q
+  description = "Parent for a Requirement View drift test"
+}
+
+resource "anecdotes_requirement_view" "test" {
+  parent_id = anecdotes_requirement.parent.requirement_id
+  view_name = %q
+}`, parentName, viewName)
+
+	var viewID string
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: config,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("anecdotes_requirement_view.test", "view_name", viewName),
+					func(s *terraform.State) error {
+						id, err := stateAttr(s, "anecdotes_requirement_view.test", "requirement_id")
+						viewID = id
+						return err
+					},
+				),
+			},
+			{
+				PreConfig: func() {
+					c := testAccNewClient(t)
+					changed := "Changed outside Terraform"
+					_, err := c.UpdateRequirementView(context.Background(), viewID, &client.RequirementViewUpdateRequest{
+						ViewName: &changed,
+					})
+					if err != nil {
+						t.Fatalf("out-of-band view_name change failed: %v", err)
+					}
+				},
+				Config: config,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("anecdotes_requirement_view.test", "view_name", viewName),
+				),
+			},
+		},
+	})
+}
+
+// TestAccDrift_RequirementViewParentDeletedIsRecreated: deleting the parent
+// requirement out-of-band cascades to delete the view too. The next apply must
+// re-create it rather than error.
+func TestAccDrift_RequirementViewParentDeletedIsRecreated(t *testing.T) {
+	parentName := randomName("req-view-drift-parent")
+	viewName := randomName("req-view-drift")
+	config := fmt.Sprintf(`
+resource "anecdotes_requirement" "parent" {
+  name        = %q
+  description = "Parent for a Requirement View drift test"
+}
+
+resource "anecdotes_requirement_view" "test" {
+  parent_id = anecdotes_requirement.parent.requirement_id
+  view_name = %q
+}`, parentName, viewName)
+
+	var viewID, parentID string
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: config,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					func(s *terraform.State) error {
+						id, err := stateAttr(s, "anecdotes_requirement_view.test", "requirement_id")
+						viewID = id
+						return err
+					},
+					func(s *terraform.State) error {
+						id, err := stateAttr(s, "anecdotes_requirement.parent", "requirement_id")
+						parentID = id
+						return err
+					},
+				),
+			},
+			{
+				PreConfig: func() {
+					c := testAccNewClient(t)
+					if err := c.DeleteRequirement(context.Background(), parentID); err != nil {
+						t.Fatalf("out-of-band parent delete failed: %v", err)
+					}
+				},
+				Config: config,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttrSet("anecdotes_requirement_view.test", "requirement_id"),
+					func(s *terraform.State) error {
+						id, err := stateAttr(s, "anecdotes_requirement_view.test", "requirement_id")
+						if err != nil {
+							return err
+						}
+						if id == viewID {
+							return fmt.Errorf("expected a re-created view with a new ID, got the cascade-deleted one (%s)", id)
+						}
+						return nil
+					},
+				),
+			},
+		},
+	})
+}
