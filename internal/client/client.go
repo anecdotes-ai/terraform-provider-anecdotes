@@ -801,6 +801,40 @@ func (c *AnecdotesClient) UpdateRequirement(ctx context.Context, requirementID s
 	return c.GetRequirement(ctx, requirementID)
 }
 
+// CreateRequirementView creates a Requirement View scoped beneath a parent
+// requirement. Unlike CreateRequirement, a server error is never resolved by
+// looking the view up by name: multiple views may share the same view_name, so
+// a by-name match could silently adopt the wrong view.
+func (c *AnecdotesClient) CreateRequirementView(ctx context.Context, view *RequirementViewCreateRequest) (*Requirement, error) {
+	respBody, err := c.doRequest(ctx, "POST", "/api/v1/requirement", view)
+	if err != nil {
+		return nil, err
+	}
+
+	var requirementID string
+	if err := json.Unmarshal(respBody, &requirementID); err == nil && requirementID != "" {
+		return c.GetRequirement(ctx, requirementID)
+	}
+
+	var result Requirement
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, fmt.Errorf("failed to parse create requirement view response: %w", err)
+	}
+	return &result, nil
+}
+
+// UpdateRequirementView updates an existing Requirement View.
+// The API requires the request body wrapped in {"requirement": {...}}.
+func (c *AnecdotesClient) UpdateRequirementView(ctx context.Context, requirementID string, view *RequirementViewUpdateRequest) (*Requirement, error) {
+	wrapped := map[string]interface{}{"requirement": view}
+	_, err := c.doRequest(ctx, "PATCH", "/api/v1/requirement/"+requirementID, wrapped)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.GetRequirement(ctx, requirementID)
+}
+
 // DeleteRequirement deletes a requirement. The response reports how many
 // requirements were removed; zero means the requirement was either already gone
 // or could not be removed, so which one is confirmed by reading it back rather
@@ -827,9 +861,10 @@ func (c *AnecdotesClient) DeleteRequirement(ctx context.Context, requirementID s
 	if err != nil {
 		return fmt.Errorf("could not confirm requirement %s was deleted: %w", requirementID, err)
 	}
-	return fmt.Errorf("requirement %s still exists after the delete call: requirements provided by the "+
-		"Anecdotes platform cannot be deleted, only custom ones. Remove it from state with "+
-		"`terraform state rm` if Terraform should stop managing it", requirementID)
+	return fmt.Errorf("requirement %s still exists after the delete call: it may be a requirement "+
+		"provided by the Anecdotes platform, which cannot be deleted (only custom requirements and "+
+		"views can). Remove it from state with `terraform state rm` if Terraform should stop managing it",
+		requirementID)
 }
 
 // ListRequirementStatuses fetches the available requirement status options.
