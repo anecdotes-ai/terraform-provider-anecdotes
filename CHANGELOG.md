@@ -21,6 +21,18 @@ the major version.
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- `anecdotes_requirement_view` resource: manages a Requirement View — a
+  requirement scoped beneath a parent requirement (`parent_id`, immutable),
+  with its own `view_name`, `category`, and `owners`. Supports create, read,
+  update, delete, and import.
+- `parent_id` and `view_name` attributes on the `anecdotes_requirement` and
+  `anecdotes_requirements` data sources, to reveal whether a looked-up
+  requirement is a Requirement View.
+
 ## [1.0.0]
 
 Initial public release of the Anecdotes Terraform Provider, covering the core

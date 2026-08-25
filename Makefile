@@ -5,7 +5,7 @@ HOSTNAME=registry.terraform.io
 NAMESPACE=anecdotes-ai
 NAME=anecdotes
 BINARY=terraform-provider-${NAME}
-VERSION=1.0.0
+VERSION=1.1.0
 OS_ARCH=$(shell go env GOOS)_$(shell go env GOARCH)
 
 default: install
