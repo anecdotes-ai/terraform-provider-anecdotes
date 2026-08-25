@@ -1,7 +1,15 @@
 # Default ownership for the repository.
-* @yardenlevy-anecdotes @briansearles-an @nivspektor
+* @anecdotes-ai/anecdotes-solution
 
 # Most sensitive paths — changes here affect workflow permissions, release
 # artifacts, and signing behavior.
-/.github/workflows/ @yardenlevy-anecdotes @briansearles-an @nivspektor
-/.goreleaser.yaml   @yardenlevy-anecdotes @briansearles-an @nivspektor
+/.goreleaser.yaml @anecdotes-ai/anecdotes-solution
+
+# AN-28155: infra/CI/tf oversight — @anecdotes-ai/cloud-infra-admins authority on these paths
+.github/ @anecdotes-ai/cloud-infra-admins
+deployment/ @anecdotes-ai/cloud-infra-admins
+**/*.tf @anecdotes-ai/cloud-infra-admins
+
+# Kept below the block so the more specific rule still wins; cloud-infra-admins
+# added rather than substituted, so release-workflow review is not dropped.
+/.github/workflows/ @anecdotes-ai/anecdotes-solution @anecdotes-ai/cloud-infra-admins
