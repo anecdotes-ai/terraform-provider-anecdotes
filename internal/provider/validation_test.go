@@ -118,6 +118,34 @@ resource "anecdotes_control" "test" {
 			expectError: regexp.MustCompile(`(?s)maturity_level value must be\s+one of`),
 		},
 		{
+			name: "requirement view requires a parent_id",
+			config: `
+resource "anecdotes_requirement_view" "test" {
+  view_name = "tf-test-validation-view"
+}`,
+			expectError: regexp.MustCompile(`(?s)"parent_id" is required`),
+		},
+		{
+			name: "requirement view category must be a known category",
+			config: `
+resource "anecdotes_requirement_view" "test" {
+  parent_id = "requirement_does_not_matter_for_plan_time_validation"
+  view_name = "tf-test-validation-view"
+  category  = "Not A Real Category"
+}`,
+			expectError: regexp.MustCompile(`(?s)category value must be\s+one of`),
+		},
+		{
+			name: "requirement view owners must be email addresses",
+			config: `
+resource "anecdotes_requirement_view" "test" {
+  parent_id = "requirement_does_not_matter_for_plan_time_validation"
+  view_name = "tf-test-validation-view"
+  owners    = ["not-an-email"]
+}`,
+			expectError: regexp.MustCompile(`(?s)must be a valid\s+email address`),
+		},
+		{
 			name: "framework auditor visible statuses must be known statuses",
 			config: folderConfig + `
 resource "anecdotes_framework" "test" {

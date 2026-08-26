@@ -49,6 +49,25 @@ be deleted, so `terraform destroy` on a provided requirement fails with an
 explanatory error rather than reporting a success that did not happen. Remove it
 from state with `terraform state rm` if Terraform should stop managing it.
 
+## Requirement Views
+
+`anecdotes_requirement_view` manages a requirement scoped beneath a parent
+requirement (`parent_id`). A few things are specific to views:
+
+- **`parent_id` is immutable.** The API rejects any attempt to change it after
+  creation; changing it in configuration replaces the view rather than updating
+  it in place.
+- **Some fields are inherited from the parent and are not exposed on the view.**
+  On creation, the platform copies the parent's description, related evidences
+  and policies, and scoping overrides onto the view — these are not attributes
+  of `anecdotes_requirement_view` and cannot be set independently through
+  Terraform. `category` and `owners` are not inherited; they behave exactly like
+  on `anecdotes_requirement`.
+- **Deleting the parent deletes its views.** If a parent `anecdotes_requirement`
+  managed elsewhere is destroyed, every view beneath it is deleted too; the next
+  `terraform plan` for that view shows it needing to be created again rather than
+  failing.
+
 ## Clearing attributes
 
 Most optional attributes are cleared by removing them from the configuration.
@@ -74,7 +93,10 @@ the object up by name and adopts the match into state. If an unrelated object
 with the same name existed at that moment, the lookup can match it instead, so
 use distinctive names for Terraform-managed objects. A create that fails with an
 explicit "already exists" conflict is never adopted — bring that object under
-management with `terraform import`.
+management with `terraform import`. This recovery does not apply to
+`anecdotes_requirement_view`: `view_name` is not unique across views, so a
+by-name lookup could adopt the wrong one. A create error on a view always
+surfaces as-is.
 
 ## Authentication happens at provider configuration
 

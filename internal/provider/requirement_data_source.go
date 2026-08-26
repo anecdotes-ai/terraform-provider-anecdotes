@@ -34,6 +34,8 @@ type RequirementDataSourceModel struct {
 	Status        types.String `tfsdk:"status"`
 	StatusName    types.String `tfsdk:"status_name"`
 	IsCustom      types.Bool   `tfsdk:"is_custom"`
+	ParentID      types.String `tfsdk:"parent_id"`
+	ViewName      types.String `tfsdk:"view_name"`
 }
 
 func (d *RequirementDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -50,8 +52,9 @@ func (d *RequirementDataSource) Schema(ctx context.Context, req datasource.Schem
 				MarkdownDescription: "The ID of the requirement to look up.",
 			},
 			"name": schema.StringAttribute{
-				Computed:            true,
-				MarkdownDescription: "The name of the requirement.",
+				Computed: true,
+				MarkdownDescription: "The name of the requirement. For a Requirement View (`parent_id` set), this is the " +
+					"*parent's* name — use `view_name` for the view's own name.",
 			},
 			"description": schema.StringAttribute{
 				Computed:            true,
@@ -72,6 +75,14 @@ func (d *RequirementDataSource) Schema(ctx context.Context, req datasource.Schem
 			"is_custom": schema.BoolAttribute{
 				Computed:            true,
 				MarkdownDescription: "Whether this is a custom requirement.",
+			},
+			"parent_id": schema.StringAttribute{
+				Computed:            true,
+				MarkdownDescription: "The ID of the parent requirement, if this requirement is a Requirement View. Empty for a standalone requirement.",
+			},
+			"view_name": schema.StringAttribute{
+				Computed:            true,
+				MarkdownDescription: "The name of the Requirement View, if this requirement is one. Empty for a standalone requirement.",
 			},
 		},
 	}
@@ -121,6 +132,8 @@ func (d *RequirementDataSource) Read(ctx context.Context, req datasource.ReadReq
 	data.Status = types.StringValue(requirement.RequirementStatus)
 	data.StatusName = types.StringValue(requirement.RequirementStatusName)
 	data.IsCustom = types.BoolValue(requirement.RequirementIsCustom)
+	data.ParentID = types.StringValue(requirement.RequirementParentID)
+	data.ViewName = types.StringValue(requirement.ViewName)
 
 	diags = resp.State.Set(ctx, &data)
 	resp.Diagnostics.Append(diags...)

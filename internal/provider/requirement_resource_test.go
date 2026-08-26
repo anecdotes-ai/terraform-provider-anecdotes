@@ -5,6 +5,7 @@ package provider
 
 import (
 	"fmt"
+	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -81,6 +82,49 @@ resource "anecdotes_requirement" "test" {
 				ImportStateVerify:                    true,
 				ImportStateVerifyIdentifierAttribute: "requirement_id",
 				ImportStateIdFunc:                    importIDFromAttr("anecdotes_requirement.test", "requirement_id"),
+			},
+		},
+	})
+}
+
+// A Requirement View's id is not a standalone requirement; importing one
+// under anecdotes_requirement must be rejected rather than silently
+// misrepresenting it (the reciprocal of the guard in
+// anecdotes_requirement_view against importing a standalone requirement).
+func TestAccRequirementResource_viewIDRejected(t *testing.T) {
+	parentName := randomName("req-parent")
+	viewName := randomName("req-view")
+	testName := randomName("req-test")
+	config := fmt.Sprintf(`
+resource "anecdotes_requirement" "parent" {
+  name        = %q
+  description = "Parent for a view-id-rejected test"
+}
+
+resource "anecdotes_requirement_view" "view" {
+  parent_id = anecdotes_requirement.parent.requirement_id
+  view_name = %q
+}
+
+resource "anecdotes_requirement" "test" {
+  name        = %q
+  description = "Standalone requirement re-targeted for import"
+}`, parentName, viewName, testName)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: config,
+			},
+			{
+				Config:            config,
+				ResourceName:      "anecdotes_requirement.test",
+				ImportState:       true,
+				ImportStateVerify: false,
+				ImportStateIdFunc: importIDFromAttr("anecdotes_requirement_view.view", "requirement_id"),
+				ExpectError:       regexp.MustCompile(`(?s)Not a Standalone Requirement`),
 			},
 		},
 	})
