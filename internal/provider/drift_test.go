@@ -624,3 +624,83 @@ resource "anecdotes_requirement_view" "test" {
 		},
 	})
 }
+
+// TestAccDrift_RequirementViewOwnersClear: setting owners then emptying the
+// set, and separately removing the attribute entirely, must both converge —
+// exercising the owners state logic shared with anecdotes_control and
+// anecdotes_requirement (an empty set and a removed attribute both mean "no
+// owners" on the platform, but only the removed case must also clear the
+// attribute from state).
+func TestAccDrift_RequirementViewOwnersClear(t *testing.T) {
+	parentName := randomName("req-view-drift-parent")
+	viewName := randomName("req-view-drift-clear")
+
+	withValue := fmt.Sprintf(`
+resource "anecdotes_requirement" "parent" {
+  name        = %q
+  description = "Parent for a Requirement View owners-clear test"
+}
+
+resource "anecdotes_requirement_view" "test" {
+  parent_id = anecdotes_requirement.parent.requirement_id
+  view_name = %q
+  owners    = ["acceptance-tests@example.com"]
+}`, parentName, viewName)
+
+	emptied := fmt.Sprintf(`
+resource "anecdotes_requirement" "parent" {
+  name        = %q
+  description = "Parent for a Requirement View owners-clear test"
+}
+
+resource "anecdotes_requirement_view" "test" {
+  parent_id = anecdotes_requirement.parent.requirement_id
+  view_name = %q
+  owners    = []
+}`, parentName, viewName)
+
+	removed := fmt.Sprintf(`
+resource "anecdotes_requirement" "parent" {
+  name        = %q
+  description = "Parent for a Requirement View owners-clear test"
+}
+
+resource "anecdotes_requirement_view" "test" {
+  parent_id = anecdotes_requirement.parent.requirement_id
+  view_name = %q
+}`, parentName, viewName)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: withValue,
+				Check:  resource.TestCheckResourceAttr("anecdotes_requirement_view.test", "owners.#", "1"),
+			},
+			{
+				Config: emptied,
+				Check:  resource.TestCheckResourceAttr("anecdotes_requirement_view.test", "owners.#", "0"),
+			},
+			{
+				Config:   emptied,
+				PlanOnly: true,
+			},
+			{
+				Config: withValue,
+				Check:  resource.TestCheckResourceAttr("anecdotes_requirement_view.test", "owners.#", "1"),
+			},
+			{
+				Config: removed,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckNoResourceAttr("anecdotes_requirement_view.test", "owners.#"),
+					testCheckRequirementViewOwnersOnPlatform(t, "anecdotes_requirement_view.test", []string{}),
+				),
+			},
+			{
+				Config:   removed,
+				PlanOnly: true,
+			},
+		},
+	})
+}
