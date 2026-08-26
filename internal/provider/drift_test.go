@@ -26,7 +26,7 @@ func testAccNewClient(t *testing.T) *client.AnecdotesClient {
 	if apiURL == "" {
 		apiURL = "https://api.anecdotes.ai"
 	}
-	c, err := client.NewAnecdotesClient(context.Background(), os.Getenv("ANECDOTES_API_KEY"), apiURL)
+	c, err := client.NewAnecdotesClient(context.Background(), os.Getenv("ANECDOTES_API_KEY"), apiURL, "terraform-provider-anecdotes-drift-test")
 	if err != nil {
 		t.Fatalf("failed to create API client for drift test: %v", err)
 	}

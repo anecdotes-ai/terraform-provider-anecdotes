@@ -110,7 +110,7 @@ func TestRefreshToken_RespectsCancellation(t *testing.T) {
 	}()
 
 	start := time.Now()
-	_, err := NewAnecdotesClient(ctx, "test-key", srv.URL)
+	_, err := NewAnecdotesClient(ctx, "test-key", srv.URL, "test-agent")
 	elapsed := time.Since(start)
 
 	if err == nil {

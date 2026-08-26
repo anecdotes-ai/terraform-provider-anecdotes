@@ -90,6 +90,18 @@ The API key is exchanged for a JWT Bearer token (valid for 60 minutes, auto-refr
 > and ` + "`terraform apply`" + ` require network access to the Anecdotes API and valid
 > credentials even when no changes are planned. ` + "`terraform validate`" + ` works offline.
 
+## Request Identification
+
+Every request the provider sends carries a ` + "`User-Agent`" + ` header identifying the
+provider version, the Terraform CLI version, and the Go runtime/platform, for example:
+
+` + "```" + `
+terraform-provider-anecdotes/1.1.0 (+https://github.com/anecdotes-ai/terraform-provider-anecdotes) Terraform/1.9.0 go1.25.13 darwin/arm64
+` + "```" + `
+
+This carries no credential or customer-identifying data — it only helps Anecdotes support
+correlate a report to the exact build that produced it.
+
 ## Support
 
 This provider requires an active Anecdotes customer account, and support is provided
@@ -183,7 +195,8 @@ func (p *AnecdotesProvider) Configure(ctx context.Context, req provider.Configur
 	}
 
 	// Create API client
-	apiClient, err := client.NewAnecdotesClient(ctx, apiKey, apiURL)
+	userAgent := client.UserAgent(p.version, req.TerraformVersion)
+	apiClient, err := client.NewAnecdotesClient(ctx, apiKey, apiURL, userAgent)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to Create Anecdotes API Client",
