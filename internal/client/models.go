@@ -385,6 +385,14 @@ type RequirementUpdateRequest struct {
 // RequirementViewCreateRequest represents the request body for creating a
 // Requirement View: a requirement scoped beneath a parent requirement, using
 // view_name in place of requirement_description.
+//
+// Unlike RequirementCreateRequest, this has no related-controls/frameworks
+// fields: on the create endpoint those only drive a one-time server-side
+// swap and are never persisted on the view itself (confirmed against the
+// live API — the create/update response never echoes them back), so there
+// is nothing for Terraform to own or reconcile here. Control associations
+// for a view are managed the same way as for any other requirement, through
+// anecdotes_mapping_control_requirement.
 type RequirementViewCreateRequest struct {
 	RequirementParentID string   `json:"requirement_parent_id"` // The parent requirement this view is scoped beneath (required)
 	ViewName            string   `json:"view_name"`             // The view's display name (required)

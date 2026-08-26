@@ -6,13 +6,10 @@ package provider
 import (
 	"context"
 	"fmt"
-	"regexp"
 	"strings"
 
 	"github.com/anecdotes-ai/terraform-provider-anecdotes/internal/client"
-	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
-	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -137,14 +134,7 @@ Framework (anecdotes_framework)
 				Description: "Email addresses of users who own this control. Owners are responsible for maintaining and updating the control. Order does not matter. Terraform owns this attribute: removing it clears the owners.",
 				Optional:    true,
 				ElementType: types.StringType,
-				Validators: []validator.Set{
-					setvalidator.ValueStringsAre(
-						stringvalidator.RegexMatches(
-							regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`),
-							"must be a valid email address",
-						),
-					),
-				},
+				Validators:  []validator.Set{ownersEmailValidator},
 			},
 		},
 	}
@@ -265,16 +255,7 @@ func (r *ControlResource) Read(ctx context.Context, req resource.ReadRequest, re
 		data.CategoryID = types.StringValue(control.ControlFrameworkCategoryID)
 	}
 
-	// An empty set and an unset attribute are distinct.
-	if len(control.ControlOwners) > 0 {
-		ownersSet, diags := types.SetValueFrom(ctx, types.StringType, control.ControlOwners)
-		resp.Diagnostics.Append(diags...)
-		data.Owners = ownersSet
-	} else if !data.Owners.IsNull() {
-		data.Owners = types.SetValueMust(types.StringType, []attr.Value{})
-	} else {
-		data.Owners = types.SetNull(types.StringType)
-	}
+	data.Owners = ownersFromAPI(ctx, &resp.Diagnostics, data.Owners, control.ControlOwners)
 
 	level, err := r.client.GetControlMaturityLevel(ctx, data.ControlID.ValueString())
 	if err != nil {

@@ -6,12 +6,9 @@ package provider
 import (
 	"context"
 	"fmt"
-	"regexp"
 
 	"github.com/anecdotes-ai/terraform-provider-anecdotes/internal/client"
-	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
-	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -120,14 +117,7 @@ the resource.
 				Description: "Email addresses of users responsible for this requirement view. Order does not matter. Terraform owns this attribute: removing it clears the owners.",
 				Optional:    true,
 				ElementType: types.StringType,
-				Validators: []validator.Set{
-					setvalidator.ValueStringsAre(
-						stringvalidator.RegexMatches(
-							regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`),
-							"must be a valid email address",
-						),
-					),
-				},
+				Validators:  []validator.Set{ownersEmailValidator},
 			},
 		},
 	}
@@ -289,15 +279,5 @@ func (r *RequirementViewResource) setRequirementViewState(ctx context.Context, d
 	// own name — view_name must be read directly.
 	data.ViewName = types.StringValue(view.ViewName)
 	data.Category = types.StringValue(view.RequirementCategory)
-
-	// An empty set and an unset attribute are distinct.
-	if len(view.RequirementOwners) > 0 {
-		ownersSet, d := types.SetValueFrom(ctx, types.StringType, view.RequirementOwners)
-		diags.Append(d...)
-		data.Owners = ownersSet
-	} else if !data.Owners.IsNull() {
-		data.Owners = types.SetValueMust(types.StringType, []attr.Value{})
-	} else {
-		data.Owners = types.SetNull(types.StringType)
-	}
+	data.Owners = ownersFromAPI(ctx, diags, data.Owners, view.RequirementOwners)
 }

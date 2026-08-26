@@ -758,18 +758,25 @@ func (c *AnecdotesClient) CreateRequirement(ctx context.Context, requirement *Re
 		return nil, false, err
 	}
 
+	created, err := c.parseRequirementCreateResponse(ctx, respBody, "create requirement")
+	return created, false, err
+}
+
+// parseRequirementCreateResponse handles both response shapes the requirement
+// create endpoint can return: a bare requirement id, which is re-fetched to
+// get the full object, or the full object inline. errContext names the
+// operation for the parse-failure error message, e.g. "create requirement".
+func (c *AnecdotesClient) parseRequirementCreateResponse(ctx context.Context, respBody []byte, errContext string) (*Requirement, error) {
 	var requirementID string
 	if err := json.Unmarshal(respBody, &requirementID); err == nil && requirementID != "" {
-		created, err := c.GetRequirement(ctx, requirementID)
-		return created, false, err
+		return c.GetRequirement(ctx, requirementID)
 	}
 
 	var result Requirement
 	if err := json.Unmarshal(respBody, &result); err != nil {
-		return nil, false, fmt.Errorf("failed to parse create requirement response: %w", err)
+		return nil, fmt.Errorf("failed to parse %s response: %w", errContext, err)
 	}
-
-	return &result, false, nil
+	return &result, nil
 }
 
 // getRequirementByName finds a requirement by its description/name. Used to
@@ -811,16 +818,7 @@ func (c *AnecdotesClient) CreateRequirementView(ctx context.Context, view *Requi
 		return nil, err
 	}
 
-	var requirementID string
-	if err := json.Unmarshal(respBody, &requirementID); err == nil && requirementID != "" {
-		return c.GetRequirement(ctx, requirementID)
-	}
-
-	var result Requirement
-	if err := json.Unmarshal(respBody, &result); err != nil {
-		return nil, fmt.Errorf("failed to parse create requirement view response: %w", err)
-	}
-	return &result, nil
+	return c.parseRequirementCreateResponse(ctx, respBody, "create requirement view")
 }
 
 // UpdateRequirementView updates an existing Requirement View.
