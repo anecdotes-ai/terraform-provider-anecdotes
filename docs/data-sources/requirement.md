@@ -34,6 +34,8 @@ output "requirement_name" {
 - `category` (String) The category of the requirement.
 - `description` (String) The description/help text of the requirement.
 - `is_custom` (Boolean) Whether this is a custom requirement.
-- `name` (String) The name of the requirement.
+- `name` (String) The name of the requirement. For a Requirement View (`parent_id` set), this is the *parent's* name — use `view_name` for the view's own name.
+- `parent_id` (String) The ID of the parent requirement, if this requirement is a Requirement View. Empty for a standalone requirement.
 - `status` (String) The status of the requirement.
 - `status_name` (String) The human-readable status name of the requirement.
+- `view_name` (String) The name of the Requirement View, if this requirement is one. Empty for a standalone requirement.

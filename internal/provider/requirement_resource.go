@@ -6,12 +6,9 @@ package provider
 import (
 	"context"
 	"fmt"
-	"regexp"
 
 	"github.com/anecdotes-ai/terraform-provider-anecdotes/internal/client"
-	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
-	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -130,14 +127,7 @@ Status values can be customized per organization, but common defaults include:
 				Description: "Email addresses of users responsible for this requirement. Order does not matter. Terraform owns this attribute: removing it clears the owners.",
 				Optional:    true,
 				ElementType: types.StringType,
-				Validators: []validator.Set{
-					setvalidator.ValueStringsAre(
-						stringvalidator.RegexMatches(
-							regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`),
-							"must be a valid email address",
-						),
-					),
-				},
+				Validators:  []validator.Set{ownersEmailValidator},
 			},
 		},
 	}
@@ -234,6 +224,19 @@ func (r *RequirementResource) Read(ctx context.Context, req resource.ReadRequest
 		return
 	}
 
+	// A requirement id that has a parent is a Requirement View, not a
+	// standalone requirement; its description and inherited fields are not
+	// managed the way this resource expects. Reject it rather than silently
+	// misrepresenting it.
+	if requirement.RequirementParentID != "" {
+		resp.Diagnostics.AddError(
+			"Not a Standalone Requirement",
+			fmt.Sprintf("Requirement %s is a Requirement View (it has a parent requirement). "+
+				"Manage it with anecdotes_requirement_view instead.", data.RequirementID.ValueString()),
+		)
+		return
+	}
+
 	// Set state from response
 	r.setRequirementState(ctx, &data, requirement, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
@@ -320,15 +323,5 @@ func (r *RequirementResource) setRequirementState(ctx context.Context, data *Req
 	// Set content (requirement_help → description, requirement_category → category)
 	data.Description = types.StringValue(requirement.RequirementHelp)
 	data.Category = types.StringValue(requirement.RequirementCategory)
-
-	// An empty set and an unset attribute are distinct.
-	if len(requirement.RequirementOwners) > 0 {
-		ownersSet, d := types.SetValueFrom(ctx, types.StringType, requirement.RequirementOwners)
-		diags.Append(d...)
-		data.Owners = ownersSet
-	} else if !data.Owners.IsNull() {
-		data.Owners = types.SetValueMust(types.StringType, []attr.Value{})
-	} else {
-		data.Owners = types.SetNull(types.StringType)
-	}
+	data.Owners = ownersFromAPI(ctx, diags, data.Owners, requirement.RequirementOwners)
 }

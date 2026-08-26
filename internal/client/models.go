@@ -261,6 +261,13 @@ type Requirement struct {
 	RequirementApplicability bool     `json:"requirement_applicability,omitempty"`
 	RequirementNoteExists    bool     `json:"requirement_note_exists,omitempty"`
 
+	// Requirement View fields. RequirementParentID is set (and immutable) only for
+	// a view; ViewName is its display name — requirement_name resolves to the
+	// parent's name for a view, not the view's own name, so callers must read
+	// ViewName directly rather than RequirementName.
+	RequirementParentID string `json:"requirement_parent_id,omitempty"`
+	ViewName            string `json:"view_name,omitempty"`
+
 	// Linked entities (from API)
 	RequirementRelatedControls   []string               `json:"requirement_related_controls,omitempty"`
 	RequirementRelatedFrameworks []string               `json:"requirement_related_frameworks,omitempty"`
@@ -373,6 +380,34 @@ type RequirementUpdateRequest struct {
 	RequirementRelatedEvidences  *[]string              `json:"requirement_related_evidences,omitempty"`
 	EvidenceIDs                  []string               `json:"evidence_ids,omitempty"`
 	RequirementScopingOverrides  map[string]interface{} `json:"requirement_scoping_overrides,omitempty"`
+}
+
+// RequirementViewCreateRequest represents the request body for creating a
+// Requirement View: a requirement scoped beneath a parent requirement, using
+// view_name in place of requirement_description.
+//
+// Unlike RequirementCreateRequest, this has no related-controls/frameworks
+// fields: on the create endpoint those only drive a one-time server-side
+// swap and are never persisted on the view itself (confirmed against the
+// live API — the create/update response never echoes them back), so there
+// is nothing for Terraform to own or reconcile here. Control associations
+// for a view are managed the same way as for any other requirement, through
+// anecdotes_mapping_control_requirement.
+type RequirementViewCreateRequest struct {
+	RequirementParentID string   `json:"requirement_parent_id"` // The parent requirement this view is scoped beneath (required)
+	ViewName            string   `json:"view_name"`             // The view's display name (required)
+	RequirementCategory string   `json:"requirement_category,omitempty"`
+	RequirementOwners   []string `json:"requirement_owners,omitempty"`
+}
+
+// RequirementViewUpdateRequest represents the request body for updating a
+// Requirement View. requirement_parent_id is immutable and is never sent here.
+// NOTE: The API expects this wrapped in {"requirement": {...}} — see UpdateRequirementView in client.go.
+type RequirementViewUpdateRequest struct {
+	ViewName            *string `json:"view_name,omitempty"`
+	RequirementCategory string  `json:"requirement_category,omitempty"`
+
+	RequirementOwners *[]string `json:"requirement_owners,omitempty"`
 }
 
 // Folder represents a folder for organizing frameworks

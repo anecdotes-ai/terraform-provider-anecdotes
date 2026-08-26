@@ -216,6 +216,102 @@ func TestLinkEvidenceToRequirement_DoesNotSendOtherFields(t *testing.T) {
 	}
 }
 
+// A view's create payload must never carry requirement_description — the API
+// rejects a view that does, since view_name is what it uses instead.
+func TestRequirementViewCreateRequest_NeverSendsDescription(t *testing.T) {
+	encoded, err := json.Marshal(&RequirementViewCreateRequest{
+		RequirementParentID: "req_parent",
+		ViewName:            "My View",
+	})
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var decoded map[string]interface{}
+	if err := json.Unmarshal(encoded, &decoded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if _, ok := decoded["requirement_description"]; ok {
+		t.Errorf("a view create request must never carry requirement_description, got %s", encoded)
+	}
+	if decoded["requirement_parent_id"] != "req_parent" {
+		t.Errorf("expected requirement_parent_id to be sent, got keys %v", keysOf(decoded))
+	}
+	if decoded["view_name"] != "My View" {
+		t.Errorf("expected view_name to be sent, got keys %v", keysOf(decoded))
+	}
+}
+
+// A view's update payload must never carry requirement_parent_id — the API
+// 400s on any attempt to change it after creation, so the struct must not
+// even have a field a caller could accidentally populate.
+func TestRequirementViewUpdateRequest_HasNoParentIDField(t *testing.T) {
+	encoded, err := json.Marshal(&RequirementViewUpdateRequest{ViewName: stringPtr("Renamed")})
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var decoded map[string]interface{}
+	if err := json.Unmarshal(encoded, &decoded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if _, ok := decoded["requirement_parent_id"]; ok {
+		t.Errorf("a view update request must never carry requirement_parent_id, got %s", encoded)
+	}
+	if _, ok := decoded["requirement_description"]; ok {
+		t.Errorf("a view update request must never carry requirement_description, got %s", encoded)
+	}
+}
+
+// CreateRequirementView must post to the shared requirement endpoint with the
+// parent id + view_name, and must not fall back to a by-name lookup on a
+// server error the way CreateRequirement does — view names aren't unique, so
+// that fallback could silently adopt the wrong view.
+func TestCreateRequirementView_SendsParentAndViewName(t *testing.T) {
+	body := captureRequest(t, func(c *AnecdotesClient) error {
+		_, err := c.CreateRequirementView(context.Background(), &RequirementViewCreateRequest{
+			RequirementParentID: "req_parent",
+			ViewName:            "My View",
+		})
+		return err
+	})
+	var decoded map[string]interface{}
+	if err := json.Unmarshal(body, &decoded); err != nil {
+		t.Fatalf("unmarshal: %v (body %s)", err, body)
+	}
+	if decoded["requirement_parent_id"] != "req_parent" || decoded["view_name"] != "My View" {
+		t.Errorf("unexpected create payload: %s", body)
+	}
+}
+
+func TestCreateRequirementView_ServerErrorDoesNotFallBackToNameLookup(t *testing.T) {
+	listCalled := false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/apikey/exchange"):
+			_, _ = w.Write([]byte("test-token"))
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/api/v1/requirement"):
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte(`{"detail":"boom"}`))
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/api/v1/requirement"):
+			listCalled = true
+			_, _ = w.Write([]byte(`[]`))
+		default:
+			_, _ = w.Write([]byte(`{}`))
+		}
+	}))
+	defer srv.Close()
+
+	_, err := newTestClient(t, srv).CreateRequirementView(context.Background(), &RequirementViewCreateRequest{
+		RequirementParentID: "req_parent",
+		ViewName:            "My View",
+	})
+	if err == nil {
+		t.Fatal("expected the server error to surface, not be swallowed by a name-lookup fallback")
+	}
+	if listCalled {
+		t.Error("CreateRequirementView must not fall back to a by-name list lookup: view names aren't unique")
+	}
+}
+
 // A delete that removed nothing must not be reported as success — but a
 // requirement that was already gone still counts as deleted.
 func TestDeleteRequirement_VerifiesTheOutcome(t *testing.T) {

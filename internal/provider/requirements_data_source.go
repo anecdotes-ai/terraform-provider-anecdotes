@@ -47,6 +47,8 @@ var requirementItemAttrTypes = map[string]attr.Type{
 	"status":         types.StringType,
 	"status_name":    types.StringType,
 	"is_custom":      types.BoolType,
+	"parent_id":      types.StringType,
+	"view_name":      types.StringType,
 }
 
 func (d *RequirementsDataSource) Schema(ctx context.Context, req datasource.SchemaRequest, resp *datasource.SchemaResponse) {
@@ -115,6 +117,14 @@ Lists all requirements in the Anecdotes Requirements Hub, with optional filterin
 						},
 						"is_custom": schema.BoolAttribute{
 							Description: "Whether this is a custom requirement.",
+							Computed:    true,
+						},
+						"parent_id": schema.StringAttribute{
+							Description: "The ID of the parent requirement, if this requirement is a Requirement View. Empty for a standalone requirement.",
+							Computed:    true,
+						},
+						"view_name": schema.StringAttribute{
+							Description: "The name of the Requirement View, if this requirement is one. Empty for a standalone requirement.",
 							Computed:    true,
 						},
 					},
@@ -201,6 +211,8 @@ func (d *RequirementsDataSource) Read(ctx context.Context, req datasource.ReadRe
 			"status":         types.StringValue(r.RequirementStatus),
 			"status_name":    types.StringValue(r.RequirementStatusName),
 			"is_custom":      types.BoolValue(r.RequirementIsCustom),
+			"parent_id":      types.StringValue(r.RequirementParentID),
+			"view_name":      types.StringValue(r.ViewName),
 		})
 		resp.Diagnostics.Append(diags...)
 		items[i] = obj

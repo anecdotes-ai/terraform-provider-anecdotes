@@ -63,6 +63,8 @@ anecdotes_framework          # Framework container (SOC2, ISO 27001, etc.)
             └── anecdotes_mapping_control_requirement  # Links to requirements (M:N)
                     │
                     └── anecdotes_requirement  # Standalone requirements (shared)
+                            │
+                            └── anecdotes_requirement_view  # Views scoped beneath a requirement
 ` + "```" + `
 
 ## Key Concepts
@@ -70,6 +72,7 @@ anecdotes_framework          # Framework container (SOC2, ISO 27001, etc.)
 - **Framework**: A compliance standard container (e.g., SOC2, ISO 27001)
 - **Control**: A prescriptive statement of what should be implemented
 - **Requirement**: An operational action that enforces controls (can be shared across frameworks)
+- **Requirement View**: A requirement scoped beneath a parent requirement, letting the same content apply per control or framework without duplicating it
 - **Control-Requirement Link**: The M:N relationship enabling cross-mapping
 
 ## Authentication
@@ -204,6 +207,7 @@ func (p *AnecdotesProvider) Resources(ctx context.Context) []func() resource.Res
 		NewControlResource,
 		NewMappingControlRequirementResource,
 		NewRequirementResource,
+		NewRequirementViewResource,
 		NewMappingRequirementEvidenceResource,
 	}
 }
