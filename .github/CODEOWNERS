@@ -3,5 +3,5 @@
 
 # Most sensitive paths — changes here affect workflow permissions, release
 # artifacts, and signing behavior.
-/.github/workflows/ @anecdotes-ai/anecdotes-solution-tech
-/.goreleaser.yaml @anecdotes-ai/anecdotes-solution-tech
+/.github/workflows/ @anecdotes-ai/anecdotes-solutions-tech
+/.goreleaser.yaml @anecdotes-ai/anecdotes-solutions-tech
