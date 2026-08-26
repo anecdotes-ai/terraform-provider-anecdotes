@@ -1,7 +1,7 @@
 # Default ownership for the repository.
-* @yardenlevy-anecdotes @briansearles-an @nivspektor
+* @anecdotes-ai/anecdotes-solutions-tech
 
 # Most sensitive paths — changes here affect workflow permissions, release
 # artifacts, and signing behavior.
-/.github/workflows/ @yardenlevy-anecdotes @briansearles-an @nivspektor
-/.goreleaser.yaml   @yardenlevy-anecdotes @briansearles-an @nivspektor
+/.github/workflows/ @anecdotes-ai/anecdotes-solutions-tech
+/.goreleaser.yaml @anecdotes-ai/anecdotes-solutions-tech
