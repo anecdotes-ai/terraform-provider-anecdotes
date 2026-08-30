@@ -21,7 +21,7 @@ the major version.
 
 ---
 
-## [Unreleased]
+## [1.1.1] - 2026-08-30
 
 ### Changed
 
