@@ -108,7 +108,7 @@ func TestRefreshToken_RetriesTransientFailures(t *testing.T) {
 			}))
 			defer srv.Close()
 
-			client, err := NewAnecdotesClient(context.Background(), "test-key", srv.URL)
+			client, err := NewAnecdotesClient(context.Background(), "test-key", srv.URL, "test-agent")
 
 			if c.wantRetried {
 				if err != nil {
@@ -148,7 +148,7 @@ func TestRefreshToken_GivesUpAfterMaxRetries(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	if _, err := NewAnecdotesClient(context.Background(), "test-key", srv.URL); err == nil {
+	if _, err := NewAnecdotesClient(context.Background(), "test-key", srv.URL, "test-agent"); err == nil {
 		t.Fatal("expected an error when the identity endpoint never recovers")
 	}
 	if got := atomic.LoadInt64(&calls); got != maxRetries+1 {

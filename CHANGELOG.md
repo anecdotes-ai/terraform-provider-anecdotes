@@ -21,6 +21,17 @@ the major version.
 
 ---
 
+## [1.1.1] - 2026-08-30
+
+### Changed
+
+- Every API request now sends a `User-Agent` header identifying the provider
+  version, Terraform CLI version, and Go runtime/platform (for example,
+  `terraform-provider-anecdotes/1.1.1 (+https://github.com/anecdotes-ai/terraform-provider-anecdotes)
+  Terraform/1.9.0 go1.25.13 darwin/arm64`), so a support report can be
+  correlated to the exact build that produced it. It carries no credential or
+  customer-identifying data.
+
 ## [1.1.0] - 2026-08-26
 
 ### Added

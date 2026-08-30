@@ -21,6 +21,7 @@ import (
 type AnecdotesClient struct {
 	apiKey     string
 	apiURL     string
+	userAgent  string
 	httpClient *http.Client
 	token      string
 	tokenExp   time.Time
@@ -59,15 +60,18 @@ func (k *keyedMutex) lock(key string) func() {
 // errRedirectRefused marks a refused redirect. It can never succeed on retry.
 var errRedirectRefused = errors.New("redirect refused")
 
-// NewAnecdotesClient creates a new Anecdotes API client
-func NewAnecdotesClient(ctx context.Context, apiKey, apiURL string) (*AnecdotesClient, error) {
+// NewAnecdotesClient creates a new Anecdotes API client. userAgent is sent as
+// the User-Agent header on every request; see UserAgent for how callers
+// should build it.
+func NewAnecdotesClient(ctx context.Context, apiKey, apiURL, userAgent string) (*AnecdotesClient, error) {
 	if apiKey == "" {
 		return nil, fmt.Errorf("api_key is required")
 	}
 
 	client := &AnecdotesClient{
-		apiKey: apiKey,
-		apiURL: apiURL,
+		apiKey:    apiKey,
+		apiURL:    apiURL,
+		userAgent: userAgent,
 		httpClient: &http.Client{
 			Timeout: 120 * time.Second,
 			// The API key travels in a custom header, which Go forwards across
@@ -101,6 +105,7 @@ func (c *AnecdotesClient) refreshToken(ctx context.Context) error {
 		}
 
 		req.Header.Set("x-anecdotes-api-key", c.apiKey)
+		req.Header.Set("User-Agent", c.userAgent)
 
 		resp, err := c.httpClient.Do(req)
 		if err != nil {
@@ -289,6 +294,7 @@ func (c *AnecdotesClient) doRequest(ctx context.Context, method, path string, bo
 
 		req.Header.Set("Authorization", "Bearer "+token)
 		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("User-Agent", c.userAgent)
 
 		resp, err := c.httpClient.Do(req)
 		if err != nil {

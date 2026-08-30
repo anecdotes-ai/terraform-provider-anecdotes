@@ -30,7 +30,7 @@ func TestClient_RefusesRedirects(t *testing.T) {
 	}))
 	defer origin.Close()
 
-	_, err := NewAnecdotesClient(context.Background(), "test-key", origin.URL)
+	_, err := NewAnecdotesClient(context.Background(), "test-key", origin.URL, "test-agent")
 	if err == nil {
 		t.Fatal("expected the client to refuse the redirect, got no error")
 	}

@@ -209,7 +209,7 @@ func TestAPIError_Classifiers(t *testing.T) {
 // token exchange.
 func newTestClient(t *testing.T, srv *httptest.Server) *AnecdotesClient {
 	t.Helper()
-	c, err := NewAnecdotesClient(context.Background(), "test-key", srv.URL)
+	c, err := NewAnecdotesClient(context.Background(), "test-key", srv.URL, "test-agent")
 	if err != nil {
 		t.Fatalf("NewAnecdotesClient: %v", err)
 	}
