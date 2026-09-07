@@ -527,3 +527,160 @@ type AttachmentFile struct {
 	FileSize    int64  `json:"file_size"`
 	ContentType string `json:"content_type"`
 }
+
+// Playbook represents an automation playbook and its steps.
+type Playbook struct {
+	PlaybookID          string                  `json:"playbook_id"`
+	PlaybookTitle       string                  `json:"playbook_title"`
+	PlaybookDescription string                  `json:"playbook_description"`
+	Active              bool                    `json:"active"`
+	Type                string                  `json:"type,omitempty"`
+	Status              string                  `json:"status,omitempty"`
+	RestrictedFeatures  []string                `json:"restricted_features,omitempty"`
+	CreatedBy           string                  `json:"created_by,omitempty"`
+	CreationTimestamp   string                  `json:"creation_timestamp,omitempty"`
+	LastUpdatedBy       string                  `json:"last_updated_by,omitempty"`
+	LastUpdateTimestamp string                  `json:"last_update_timestamp,omitempty"`
+	ScheduleConfig      *PlaybookScheduleConfig `json:"schedule_config,omitempty"`
+	Steps               []PlaybookStep          `json:"steps,omitempty"`
+}
+
+// PlaybookScheduleConfig is the recurring-execution schedule of a playbook.
+// EndsIn and EndDate are mutually exclusive; EndDate is derived from StartDate
+// and EndsIn when only EndsIn is supplied.
+type PlaybookScheduleConfig struct {
+	Period    string  `json:"period"`
+	Time      string  `json:"time"`
+	Timezone  string  `json:"timezone,omitempty"`
+	StartDate string  `json:"start_date"`
+	EndsIn    *string `json:"ends_in,omitempty"`
+	EndDate   *string `json:"end_date,omitempty"`
+}
+
+// PlaybookStep is a single step of a playbook.
+type PlaybookStep struct {
+	StepID               string                 `json:"step_id"`
+	StepTitle            string                 `json:"step_title"`
+	PlaybookID           string                 `json:"playbook_id,omitempty"`
+	StepTriggerEvent     string                 `json:"step_trigger_event"`
+	StepActionType       string                 `json:"step_action_type"`
+	InternalAction       bool                   `json:"internal_action"`
+	StepURLToTrigger     string                 `json:"step_url_to_trigger,omitempty"`
+	FilterConfiguration  map[string]interface{} `json:"filter_configuration,omitempty"`
+	PayloadConfiguration map[string]interface{} `json:"payload_configuration,omitempty"`
+	HeadersConfiguration map[string]interface{} `json:"headers_configuration,omitempty"`
+	LastRunTimestamp     *string                `json:"last_run_timestamp,omitempty"`
+	LastRunStatus        string                 `json:"last_run_status,omitempty"`
+}
+
+// PlaybookCreateRequest represents the request body for creating a playbook
+// together with all of its steps.
+type PlaybookCreateRequest struct {
+	PlaybookTitle       string                  `json:"playbook_title"`
+	PlaybookDescription string                  `json:"playbook_description"`
+	Steps               []PlaybookStepInput     `json:"steps"`
+	ScheduleConfig      *PlaybookScheduleConfig `json:"schedule_config,omitempty"`
+}
+
+// PlaybookStepInput is a step as supplied on create. InternalAction and the
+// placeholder trigger URL of an internal step are set by the platform.
+type PlaybookStepInput struct {
+	StepID               string                 `json:"step_id,omitempty"`
+	StepTitle            string                 `json:"step_title"`
+	StepTriggerEvent     string                 `json:"step_trigger_event"`
+	StepActionType       string                 `json:"step_action_type"`
+	StepURLToTrigger     string                 `json:"step_url_to_trigger,omitempty"`
+	FilterConfiguration  map[string]interface{} `json:"filter_configuration,omitempty"`
+	PayloadConfiguration map[string]interface{} `json:"payload_configuration,omitempty"`
+	HeadersConfiguration map[string]interface{} `json:"headers_configuration,omitempty"`
+}
+
+// PlaybookUpdateRequest represents the request body for updating a playbook.
+// Only the fields set here are changed; steps listed in Steps must already
+// exist on the playbook.
+type PlaybookUpdateRequest struct {
+	PlaybookTitle       *string                 `json:"playbook_title,omitempty"`
+	PlaybookDescription *string                 `json:"playbook_description,omitempty"`
+	Active              *bool                   `json:"active,omitempty"`
+	Steps               []PlaybookStepUpdate    `json:"steps,omitempty"`
+	ScheduleConfig      *PlaybookScheduleConfig `json:"schedule_config,omitempty"`
+}
+
+// PlaybookStepUpdate is a step as supplied on update. A nil configuration is
+// left unchanged; an empty one clears it.
+type PlaybookStepUpdate struct {
+	StepID               string                  `json:"step_id"`
+	StepTitle            *string                 `json:"step_title,omitempty"`
+	StepTriggerEvent     *string                 `json:"step_trigger_event,omitempty"`
+	StepActionType       *string                 `json:"step_action_type,omitempty"`
+	StepURLToTrigger     *string                 `json:"step_url_to_trigger,omitempty"`
+	InternalAction       *bool                   `json:"internal_action,omitempty"`
+	FilterConfiguration  *map[string]interface{} `json:"filter_configuration,omitempty"`
+	PayloadConfiguration *map[string]interface{} `json:"payload_configuration,omitempty"`
+	HeadersConfiguration *map[string]interface{} `json:"headers_configuration,omitempty"`
+}
+
+// PlaybookLibraryEvent is a trigger event a playbook step can subscribe to.
+// A step subscribes using TriggerKey when it is set, and EventType otherwise.
+type PlaybookLibraryEvent struct {
+	EventType            string   `json:"event_type"`
+	TriggerKey           string   `json:"trigger_key,omitempty"`
+	EventText            string   `json:"event_text"`
+	Category             string   `json:"category"`
+	Description          string   `json:"description,omitempty"`
+	Icon                 string   `json:"icon,omitempty"`
+	IsAvailable          bool     `json:"is_available"`
+	SupportedActions     []string `json:"supported_actions,omitempty"`
+	ComingSoonActions    []string `json:"coming_soon_actions,omitempty"`
+	RequiredChangedField string   `json:"required_changed_field,omitempty"`
+}
+
+// PlaybookLibraryAction is an action a playbook step can perform.
+type PlaybookLibraryAction struct {
+	ActionType     string `json:"action_type"`
+	ActionText     string `json:"action_text"`
+	ActionName     string `json:"action_name,omitempty"`
+	ActionCategory string `json:"action_category,omitempty"`
+	Description    string `json:"description,omitempty"`
+	Icon           string `json:"icon,omitempty"`
+	ComingSoon     bool   `json:"coming_soon"`
+}
+
+// ValidPlaybookStepActionTypes returns the actions a playbook step can perform.
+func ValidPlaybookStepActionTypes() []string {
+	return []string{
+		"assign_control",
+		"assign_requirement",
+		"audit_sync_comment",
+		"audit_sync_control",
+		"audit_sync_evidence",
+		"call_forge",
+		"change_control_status",
+		"comment_specific_control",
+		"comment_triggered_control",
+		"comment_triggered_risk",
+		"create_comment",
+		"create_finding",
+		"create_task",
+		"evidence_to_bucket",
+		"in_app_notification",
+		"notify_via_service",
+		"send_email",
+		"trigger_plugin_run",
+		"update_risk_level",
+		"webhook",
+	}
+}
+
+// ValidPlaybookSchedulePeriods returns the recurrence periods of a scheduled playbook.
+func ValidPlaybookSchedulePeriods() []string {
+	return []string{"day", "week", "month", "quarter", "year"}
+}
+
+// ValidPlaybookScheduleEndsIn returns the durations after which a schedule expires.
+func ValidPlaybookScheduleEndsIn() []string {
+	return []string{"week", "month", "year"}
+}
+
+// ScheduledPlaybookTrigger is the trigger event of a scheduled playbook's first step.
+const ScheduledPlaybookTrigger = "ScheduledPlaybookTriggered"
