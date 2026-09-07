@@ -118,6 +118,32 @@ resource "anecdotes_control" "test" {
 			expectError: regexp.MustCompile(`(?s)maturity_level value must be\s+one of`),
 		},
 		{
+			name: "playbook step identifiers must be unique",
+			config: `
+resource "anecdotes_playbook" "test" {
+  title       = "tf-test-validation-playbook"
+  description = "validation"
+
+  steps = [
+    {
+      step_id        = "11111111-2222-4333-8444-555555555555"
+      title          = "first"
+      trigger_event  = "ControlStatusChanged"
+      action_type    = "webhook"
+      url_to_trigger = "https://example.com/validation"
+    },
+    {
+      step_id        = "11111111-2222-4333-8444-555555555555"
+      title          = "second"
+      trigger_event  = "EvidenceGapDetected"
+      action_type    = "webhook"
+      url_to_trigger = "https://example.com/validation"
+    },
+  ]
+}`,
+			expectError: regexp.MustCompile(`(?s)Duplicate Step Identifier`),
+		},
+		{
 			name: "playbook schedule timezone must use a current name",
 			config: `
 resource "anecdotes_playbook" "test" {

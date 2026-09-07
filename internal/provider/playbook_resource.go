@@ -646,12 +646,21 @@ func (r *PlaybookResource) ValidateConfig(ctx context.Context, req resource.Vali
 	}
 
 	// A step may be chained to another step in the same playbook. An id that
-	// belongs to no step in it would leave the step unreachable.
+	// belongs to no step in it would leave the step unreachable, and one used
+	// twice describes two steps as the same step.
 	known := map[string]bool{}
-	for _, step := range steps {
-		if !step.StepID.IsNull() && !step.StepID.IsUnknown() {
-			known[step.StepID.ValueString()] = true
+	for i, step := range steps {
+		if step.StepID.IsNull() || step.StepID.IsUnknown() {
+			continue
 		}
+		id := step.StepID.ValueString()
+		if known[id] {
+			resp.Diagnostics.AddAttributeError(path.Root("steps").AtListIndex(i).AtName("step_id"),
+				"Duplicate Step Identifier",
+				fmt.Sprintf("step_id %q is already used by another step in this playbook. "+
+					"Each step needs its own identifier.", id))
+		}
+		known[id] = true
 	}
 	for i, step := range steps {
 		if step.TriggerEvent.IsUnknown() {
