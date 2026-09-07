@@ -118,6 +118,79 @@ resource "anecdotes_control" "test" {
 			expectError: regexp.MustCompile(`(?s)maturity_level value must be\s+one of`),
 		},
 		{
+			name: "playbook schedule timezone must use a current name",
+			config: `
+resource "anecdotes_playbook" "test" {
+  title       = "tf-test-validation-playbook"
+  description = "validation"
+
+  schedule_config = {
+    period     = "day"
+    time       = "09:00"
+    timezone   = "US/Eastern"
+    start_date = "2026-09-07T00:00:00Z"
+  }
+
+  steps = [
+    {
+      title          = "step"
+      trigger_event  = "ScheduledPlaybookTriggered"
+      action_type    = "webhook"
+      url_to_trigger = "https://example.com/validation"
+    },
+  ]
+}`,
+			expectError: regexp.MustCompile(`(?s)Deprecated Timezone Name`),
+		},
+		{
+			name: "playbook schedule start date must be in coordinated universal time",
+			config: `
+resource "anecdotes_playbook" "test" {
+  title       = "tf-test-validation-playbook"
+  description = "validation"
+
+  schedule_config = {
+    period     = "day"
+    time       = "09:00"
+    start_date = "2026-09-07T09:00:00+02:00"
+  }
+
+  steps = [
+    {
+      title          = "step"
+      trigger_event  = "ScheduledPlaybookTriggered"
+      action_type    = "webhook"
+      url_to_trigger = "https://example.com/validation"
+    },
+  ]
+}`,
+			expectError: regexp.MustCompile(`(?s)Timestamp Must Be UTC`),
+		},
+		{
+			name: "playbook schedule requires a scheduled trigger",
+			config: `
+resource "anecdotes_playbook" "test" {
+  title       = "tf-test-validation-playbook"
+  description = "validation"
+
+  schedule_config = {
+    period     = "day"
+    time       = "09:00"
+    start_date = "2026-09-07T00:00:00Z"
+  }
+
+  steps = [
+    {
+      title          = "step"
+      trigger_event  = "ControlStatusChanged"
+      action_type    = "webhook"
+      url_to_trigger = "https://example.com/validation"
+    },
+  ]
+}`,
+			expectError: regexp.MustCompile(`(?s)Schedule Requires a Scheduled Trigger`),
+		},
+		{
 			name: "requirement view requires a parent_id",
 			config: `
 resource "anecdotes_requirement_view" "test" {

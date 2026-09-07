@@ -463,3 +463,124 @@ resource "anecdotes_playbook" "test" {
 		},
 	})
 }
+
+// A schedule cannot be removed from a playbook, so dropping schedule_config
+// must plan as a replacement rather than an update.
+func TestAccPlaybookResource_removingScheduleReplaces(t *testing.T) {
+	title := randomName("pb-unschedule")
+
+	scheduled := fmt.Sprintf(`
+resource "anecdotes_playbook" "test" {
+  title       = %q
+  description = "schedule removal"
+
+  schedule_config = {
+    period     = "day"
+    time       = "09:00"
+    start_date = "2026-09-07T00:00:00Z"
+  }
+
+  steps = [
+    {
+      title          = "step"
+      trigger_event  = "ScheduledPlaybookTriggered"
+      action_type    = "webhook"
+      url_to_trigger = "https://example.com/tf-acc-unschedule"
+    },
+  ]
+}`, title)
+
+	unscheduled := fmt.Sprintf(`
+resource "anecdotes_playbook" "test" {
+  title       = %q
+  description = "schedule removal"
+
+  steps = [
+    {
+      title          = "step"
+      trigger_event  = "ControlStatusChanged"
+      action_type    = "webhook"
+      url_to_trigger = "https://example.com/tf-acc-unschedule"
+    },
+  ]
+}`, title)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: scheduled,
+				Check:  resource.TestCheckResourceAttr("anecdotes_playbook.test", "schedule_config.period", "day"),
+			},
+			{
+				Config: unscheduled,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("anecdotes_playbook.test", plancheck.ResourceActionDestroyBeforeCreate),
+					},
+				},
+				Check: resource.TestCheckNoResourceAttr("anecdotes_playbook.test", "schedule_config.period"),
+			},
+		},
+	})
+}
+
+// A step configuration is optional and computed, so removing it from the
+// configuration leaves the stored value in place rather than clearing it.
+func TestAccPlaybookResource_removingConfigurationKeepsIt(t *testing.T) {
+	title := randomName("pb-keepconfig")
+
+	step := func(payload string) string {
+		return fmt.Sprintf(`
+resource "anecdotes_playbook" "test" {
+  title       = %q
+  description = "configuration removal"
+
+  steps = [
+    {
+      title          = "step"
+      trigger_event  = "ControlStatusChanged"
+      action_type    = "webhook"
+      url_to_trigger = "https://example.com/tf-acc-keepconfig"
+      %s
+    },
+  ]
+}`, title, payload)
+	}
+
+	checkStoredPayload := func(s *terraform.State) error {
+		id, err := stateAttr(s, "anecdotes_playbook.test", "playbook_id")
+		if err != nil {
+			return err
+		}
+		playbook, err := testAccNewClient(t).GetPlaybook(context.Background(), id)
+		if err != nil {
+			return fmt.Errorf("reading playbook %s: %w", id, err)
+		}
+		if got := playbook.Steps[0].PayloadConfiguration["source"]; got != "terraform" {
+			return fmt.Errorf("the platform no longer holds the payload: %v", playbook.Steps[0].PayloadConfiguration)
+		}
+		return nil
+	}
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: step(`payload_configuration = jsonencode({ source = "terraform" })`),
+				Check:  checkStoredPayload,
+			},
+			{
+				// Dropping the attribute is not a change: the stored value stays.
+				Config:   step(``),
+				PlanOnly: true,
+			},
+			{
+				Config: step(``),
+				Check:  checkStoredPayload,
+			},
+		},
+	})
+}
