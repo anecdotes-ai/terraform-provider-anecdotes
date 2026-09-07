@@ -21,6 +21,22 @@ the major version.
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- `anecdotes_playbook` resource for managing automations that run one or more
+  steps when a platform event fires or on a schedule. Steps are configured as a
+  nested list; a step can be chained to another by pointing its `trigger_event`
+  at that step's `step_id`. Steps can be edited in place, but a change to which
+  steps a playbook has replaces the playbook, as does removing a schedule.
+- `anecdotes_playbook_library` data source listing the trigger events a playbook
+  step can subscribe to, filterable by category and availability.
+- `anecdotes_playbook_action_library` data source listing the actions a playbook
+  step can perform.
+
+---
+
 ## [1.1.1] - 2026-08-30
 
 ### Changed
