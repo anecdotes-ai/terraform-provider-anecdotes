@@ -17,8 +17,12 @@ description: |-
                              │
                              └── anecdotes_requirement_view  # Views scoped beneath a requirement
  
+ anecdotes_playbook           # Event- or schedule-driven automation
+     │
+     └── step                 # One or more steps, nested in the playbook (1:N)
+ 
  Key Concepts
- Framework: A compliance standard container (e.g., SOC2, ISO 27001)Control: A prescriptive statement of what should be implementedRequirement: An operational action that enforces controls (can be shared across frameworks)Requirement View: A requirement scoped beneath a parent requirement, letting the same content apply per control or framework without duplicating itControl-Requirement Link: The M:N relationship enabling cross-mapping
+ Framework: A compliance standard container (e.g., SOC2, ISO 27001)Control: A prescriptive statement of what should be implementedRequirement: An operational action that enforces controls (can be shared across frameworks)Requirement View: A requirement scoped beneath a parent requirement, letting the same content apply per control or framework without duplicating itControl-Requirement Link: The M:N relationship enabling cross-mappingPlaybook: An automation that runs one or more steps when a platform event fires or on a schedule
  Authentication
  Generate an API token from the Anecdotes platform:
  Log into Anecdotes as an Admin userNavigate to Administration → API TokensCreate a new token with the Admin roleCopy the token and store it securely
@@ -59,6 +63,10 @@ anecdotes_framework          # Framework container (SOC2, ISO 27001, etc.)
                     └── anecdotes_requirement  # Standalone requirements (shared)
                             │
                             └── anecdotes_requirement_view  # Views scoped beneath a requirement
+
+anecdotes_playbook           # Event- or schedule-driven automation
+    │
+    └── step                 # One or more steps, nested in the playbook (1:N)
 ```
 
 ## Key Concepts
@@ -68,6 +76,7 @@ anecdotes_framework          # Framework container (SOC2, ISO 27001, etc.)
 - **Requirement**: An operational action that enforces controls (can be shared across frameworks)
 - **Requirement View**: A requirement scoped beneath a parent requirement, letting the same content apply per control or framework without duplicating it
 - **Control-Requirement Link**: The M:N relationship enabling cross-mapping
+- **Playbook**: An automation that runs one or more steps when a platform event fires or on a schedule
 
 ## Authentication
 
