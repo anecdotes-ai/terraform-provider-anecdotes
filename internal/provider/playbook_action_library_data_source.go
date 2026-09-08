@@ -37,6 +37,16 @@ var playbookLibraryActionAttrTypes = map[string]attr.Type{
 	"action_category": types.StringType,
 	"description":     types.StringType,
 	"coming_soon":     types.BoolType,
+	"action_fields":   types.ListType{ElemType: types.ObjectType{AttrTypes: playbookActionFieldAttrTypes}},
+}
+
+var playbookActionFieldAttrTypes = map[string]attr.Type{
+	"field_id":     types.StringType,
+	"display_name": types.StringType,
+	"type":         types.StringType,
+	"is_required":  types.BoolType,
+	"description":  types.StringType,
+	"values":       types.ListType{ElemType: types.StringType},
 }
 
 func (d *PlaybookActionLibraryDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -88,6 +98,39 @@ Lists the actions a playbook step can perform, so an ` + "`action_type`" + ` on
 							Description: "Whether the action is announced but not yet available.",
 							Computed:    true,
 						},
+						"action_fields": schema.ListNestedAttribute{
+							Description: "The fields this action takes. A required one must appear in the payload_configuration of a step performing the action.",
+							Computed:    true,
+							NestedObject: schema.NestedAttributeObject{
+								Attributes: map[string]schema.Attribute{
+									"field_id": schema.StringAttribute{
+										Description: "The key to use in the step's payload_configuration.",
+										Computed:    true,
+									},
+									"display_name": schema.StringAttribute{
+										Description: "The human-readable name of the field.",
+										Computed:    true,
+									},
+									"type": schema.StringAttribute{
+										Description: "The kind of value the field holds.",
+										Computed:    true,
+									},
+									"is_required": schema.BoolAttribute{
+										Description: "Whether a step performing this action must supply the field.",
+										Computed:    true,
+									},
+									"description": schema.StringAttribute{
+										Description: "What the field holds.",
+										Computed:    true,
+									},
+									"values": schema.ListAttribute{
+										Description: "The values the field accepts, when it is a closed set.",
+										Computed:    true,
+										ElementType: types.StringType,
+									},
+								},
+							},
+						},
 					},
 				},
 			},
@@ -136,6 +179,24 @@ func (d *PlaybookActionLibraryDataSource) Read(ctx context.Context, req datasour
 
 	items := make([]attr.Value, len(filtered))
 	for i, a := range filtered {
+		fields := make([]attr.Value, len(a.ActionFields))
+		for j, f := range a.ActionFields {
+			values, d := types.ListValueFrom(ctx, types.StringType, f.Values)
+			resp.Diagnostics.Append(d...)
+			fieldObj, d := types.ObjectValue(playbookActionFieldAttrTypes, map[string]attr.Value{
+				"field_id":     types.StringValue(f.FieldID),
+				"display_name": types.StringValue(f.DisplayName),
+				"type":         types.StringValue(f.Type),
+				"is_required":  types.BoolValue(f.IsRequired),
+				"description":  types.StringValue(f.FieldDescription),
+				"values":       values,
+			})
+			resp.Diagnostics.Append(d...)
+			fields[j] = fieldObj
+		}
+		actionFields, d := types.ListValue(types.ObjectType{AttrTypes: playbookActionFieldAttrTypes}, fields)
+		resp.Diagnostics.Append(d...)
+
 		obj, diags := types.ObjectValue(playbookLibraryActionAttrTypes, map[string]attr.Value{
 			"action_type":     types.StringValue(a.ActionType),
 			"action_text":     types.StringValue(a.ActionText),
@@ -143,6 +204,7 @@ func (d *PlaybookActionLibraryDataSource) Read(ctx context.Context, req datasour
 			"action_category": types.StringValue(a.ActionCategory),
 			"description":     types.StringValue(a.Description),
 			"coming_soon":     types.BoolValue(a.ComingSoon),
+			"action_fields":   actionFields,
 		})
 		resp.Diagnostics.Append(diags...)
 		items[i] = obj

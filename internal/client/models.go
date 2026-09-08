@@ -623,27 +623,52 @@ type PlaybookStepUpdate struct {
 // PlaybookLibraryEvent is a trigger event a playbook step can subscribe to.
 // A step subscribes using TriggerKey when it is set, and EventType otherwise.
 type PlaybookLibraryEvent struct {
-	EventType            string   `json:"event_type"`
-	TriggerKey           string   `json:"trigger_key,omitempty"`
-	EventText            string   `json:"event_text"`
-	Category             string   `json:"category"`
-	Description          string   `json:"description,omitempty"`
-	Icon                 string   `json:"icon,omitempty"`
-	IsAvailable          bool     `json:"is_available"`
-	SupportedActions     []string `json:"supported_actions,omitempty"`
-	ComingSoonActions    []string `json:"coming_soon_actions,omitempty"`
-	RequiredChangedField string   `json:"required_changed_field,omitempty"`
+	EventType            string               `json:"event_type"`
+	TriggerKey           string               `json:"trigger_key,omitempty"`
+	EventText            string               `json:"event_text"`
+	Category             string               `json:"category"`
+	Description          string               `json:"description,omitempty"`
+	Icon                 string               `json:"icon,omitempty"`
+	IsAvailable          bool                 `json:"is_available"`
+	SupportedActions     []string             `json:"supported_actions,omitempty"`
+	ComingSoonActions    []string             `json:"coming_soon_actions,omitempty"`
+	RequiredChangedField string               `json:"required_changed_field,omitempty"`
+	EventFields          []PlaybookEventField `json:"event_fields,omitempty"`
+}
+
+// PlaybookEventField is a field an event carries. A filterable one can be used
+// as the left side of a step's filter_configuration, paired with its operator.
+type PlaybookEventField struct {
+	FieldID          string   `json:"field_id"`
+	DisplayName      string   `json:"display_name,omitempty"`
+	Type             string   `json:"type,omitempty"`
+	IsFilterable     bool     `json:"is_filterable"`
+	AQLOperator      string   `json:"aql_operator,omitempty"`
+	FieldDescription string   `json:"field_description,omitempty"`
+	Values           []string `json:"values,omitempty"`
 }
 
 // PlaybookLibraryAction is an action a playbook step can perform.
 type PlaybookLibraryAction struct {
-	ActionType     string `json:"action_type"`
-	ActionText     string `json:"action_text"`
-	ActionName     string `json:"action_name,omitempty"`
-	ActionCategory string `json:"action_category,omitempty"`
-	Description    string `json:"description,omitempty"`
-	Icon           string `json:"icon,omitempty"`
-	ComingSoon     bool   `json:"coming_soon"`
+	ActionType     string                `json:"action_type"`
+	ActionText     string                `json:"action_text"`
+	ActionName     string                `json:"action_name,omitempty"`
+	ActionCategory string                `json:"action_category,omitempty"`
+	Description    string                `json:"description,omitempty"`
+	Icon           string                `json:"icon,omitempty"`
+	ComingSoon     bool                  `json:"coming_soon"`
+	ActionFields   []PlaybookActionField `json:"action_fields,omitempty"`
+}
+
+// PlaybookActionField is a field an action takes. A required one must appear in
+// the payload_configuration of a step performing that action.
+type PlaybookActionField struct {
+	FieldID          string   `json:"field_id"`
+	DisplayName      string   `json:"display_name,omitempty"`
+	Type             string   `json:"type,omitempty"`
+	IsRequired       bool     `json:"is_required"`
+	FieldDescription string   `json:"field_description,omitempty"`
+	Values           []string `json:"values,omitempty"`
 }
 
 // ValidPlaybookStepActionTypes returns the actions a playbook step can perform.
