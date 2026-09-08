@@ -255,7 +255,7 @@ func (r *ControlResource) Read(ctx context.Context, req resource.ReadRequest, re
 		data.CategoryID = types.StringValue(control.ControlFrameworkCategoryID)
 	}
 
-	data.Owners = ownersFromAPI(ctx, &resp.Diagnostics, data.Owners, control.ControlOwners)
+	data.Owners = stringSetFromAPI(ctx, &resp.Diagnostics, data.Owners, control.ControlOwners)
 
 	level, err := r.client.GetControlMaturityLevel(ctx, data.ControlID.ValueString())
 	if err != nil {

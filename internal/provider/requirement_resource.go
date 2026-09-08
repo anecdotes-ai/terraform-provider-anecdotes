@@ -323,5 +323,5 @@ func (r *RequirementResource) setRequirementState(ctx context.Context, data *Req
 	// Set content (requirement_help → description, requirement_category → category)
 	data.Description = types.StringValue(requirement.RequirementHelp)
 	data.Category = types.StringValue(requirement.RequirementCategory)
-	data.Owners = ownersFromAPI(ctx, diags, data.Owners, requirement.RequirementOwners)
+	data.Owners = stringSetFromAPI(ctx, diags, data.Owners, requirement.RequirementOwners)
 }

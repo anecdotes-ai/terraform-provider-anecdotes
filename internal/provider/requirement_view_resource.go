@@ -279,5 +279,5 @@ func (r *RequirementViewResource) setRequirementViewState(ctx context.Context, d
 	// own name — view_name must be read directly.
 	data.ViewName = types.StringValue(view.ViewName)
 	data.Category = types.StringValue(view.RequirementCategory)
-	data.Owners = ownersFromAPI(ctx, diags, data.Owners, view.RequirementOwners)
+	data.Owners = stringSetFromAPI(ctx, diags, data.Owners, view.RequirementOwners)
 }
