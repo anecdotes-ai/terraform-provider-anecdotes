@@ -135,6 +135,30 @@ clearing it. Set it to `jsonencode({})` to clear it.
 Playbook steps run once. There is no retry setting to configure, so the provider
 does not expose one.
 
+## A playbook step's action and payload are not validated against its trigger
+
+Two rules govern a step, and the platform enforces neither. A step that breaks
+either one is accepted and stored, but never runs, and the application shows the
+playbook as an empty row.
+
+1. `action_type` must be one the trigger supports. Every event lists its own
+   `supported_actions`, and they differ: `EvidenceGapDetected` supports
+   `create_finding` but not `create_task`, for example. The provider validates
+   `action_type` against the full set of actions the platform defines, which is
+   wider than the set any single trigger accepts.
+2. The action's required fields must be present in `payload_configuration`.
+   `create_finding` requires `title`, `severity` and `reported_by`;
+   `webhook` requires `url_to_trigger` instead, which is its own attribute.
+
+Both sets are readable before writing a step. `anecdotes_playbook_library`
+reports `supported_actions` and `event_fields` for each event, and
+`anecdotes_playbook_action_library` reports `action_fields` with `is_required`
+for each action.
+
+A field referenced from a filter or a payload template must also be one the
+event carries: `event_fields` lists them, along with which are filterable and
+the operator a filter on each must use.
+
 ## Some playbook actions are not yet available
 
 `action_type` accepts every action the platform defines, including ones it has

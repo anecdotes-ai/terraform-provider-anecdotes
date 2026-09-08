@@ -55,6 +55,7 @@ Read-Only:
 - `category` (String) The part of the platform the event belongs to.
 - `coming_soon_actions` (List of String) The action types announced for this event but not yet available.
 - `description` (String) What the event describes.
+- `event_fields` (Attributes List) The fields this event carries. A filterable one can be used as the left side of a step's filter_configuration, and any of them can be referenced from a payload as {{ field_id }}. (see [below for nested schema](#nestedatt--events--event_fields))
 - `event_text` (String) The human-readable name of the event.
 - `event_type` (String) The platform event that fires the step.
 - `is_available` (Boolean) Whether the event is available to this account.
@@ -62,3 +63,16 @@ Read-Only:
 - `supported_actions` (List of String) The action types a step subscribing to this event can perform.
 - `trigger_key` (String) The qualified form of the event when it distinguishes a changed field, for example FindingUpdated:severity. Empty when the event does not declare one.
 - `trigger_value` (String) The value to use as a step's trigger_event: trigger_key when set, event_type otherwise.
+
+<a id="nestedatt--events--event_fields"></a>
+### Nested Schema for `events.event_fields`
+
+Read-Only:
+
+- `aql_operator` (String) The operator a filter on this field must use.
+- `description` (String) What the field holds.
+- `display_name` (String) The human-readable name of the field.
+- `field_id` (String) The name to use in a filter or a payload template.
+- `is_filterable` (Boolean) Whether a step's filter_configuration can restrict on this field.
+- `type` (String) The kind of value the field holds.
+- `values` (List of String) The values the field accepts, when it is a closed set.

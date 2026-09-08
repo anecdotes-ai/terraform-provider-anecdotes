@@ -10,9 +10,19 @@ resource "anecdotes_playbook" "control_status_webhook" {
       action_type    = "webhook"
       url_to_trigger = "https://example.com/hooks/anecdotes"
 
+      # Field names come from the event's own fields, which the
+      # anecdotes_playbook_library data source reports.
       payload_configuration = jsonencode({
-        control = "{{ control_name }}"
-        status  = "{{ control_status }}"
+        control = "{{ extra_payload.control_name }}"
+        status  = "{{ extra_payload.new }}"
+      })
+
+      # Only fire for controls that moved into IN_PROGRESS. left is a
+      # filterable field of the event; operator is that field's aql_operator.
+      filter_configuration = jsonencode({
+        left     = "extra_payload.new"
+        operator = "IsIn"
+        right    = ["IN_PROGRESS"]
       })
       headers_configuration = jsonencode({
         "X-Source" = "anecdotes"
@@ -24,21 +34,34 @@ resource "anecdotes_playbook" "control_status_webhook" {
 # Two steps, chained: the second runs after the first. Chaining points a step's
 # trigger_event at the step_id of the step it follows, so those ids are set
 # explicitly rather than generated.
+#
+# An action must be one the trigger supports. Each event in the
+# anecdotes_playbook_library data source reports its own supported_actions, and
+# an action outside that set is stored but does not run.
 resource "anecdotes_playbook" "gap_escalation" {
   title       = "Escalate evidence gaps"
-  description = "Opens a task on an evidence gap, then records a comment"
+  description = "Opens a finding on an evidence gap, then posts to a webhook"
 
   steps = [
     {
       step_id       = "6f9619ff-8b86-4011-b42d-00c04fc964ff"
-      title         = "Open a task"
+      title         = "Open a finding"
       trigger_event = "EvidenceGapDetected"
-      action_type   = "create_task"
+      action_type   = "create_finding"
+
+      # Each action has its own required fields, carried in the payload. The
+      # anecdotes_playbook_action_library data source reports which are required.
+      payload_configuration = jsonencode({
+        title       = "Evidence gap detected"
+        severity    = "MEDIUM"
+        reported_by = "compliance@example.com"
+      })
     },
     {
-      title         = "Comment on the finding"
-      trigger_event = "6f9619ff-8b86-4011-b42d-00c04fc964ff"
-      action_type   = "create_comment"
+      title          = "Notify the compliance webhook"
+      trigger_event  = "6f9619ff-8b86-4011-b42d-00c04fc964ff"
+      action_type    = "webhook"
+      url_to_trigger = "https://example.com/hooks/evidence-gap"
     },
   ]
 }

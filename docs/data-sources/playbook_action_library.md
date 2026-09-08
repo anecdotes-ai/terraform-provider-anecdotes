@@ -46,8 +46,21 @@ output "available_action_types" {
 Read-Only:
 
 - `action_category` (String) The group of actions this one belongs to.
+- `action_fields` (Attributes List) The fields this action takes. A required one must appear in the payload_configuration of a step performing the action. (see [below for nested schema](#nestedatt--actions--action_fields))
 - `action_name` (String) The short name of the action.
 - `action_text` (String) The human-readable name of the action.
 - `action_type` (String) The value to use as a step's action_type.
 - `coming_soon` (Boolean) Whether the action is announced but not yet available.
 - `description` (String) What the action does.
+
+<a id="nestedatt--actions--action_fields"></a>
+### Nested Schema for `actions.action_fields`
+
+Read-Only:
+
+- `description` (String) What the field holds.
+- `display_name` (String) The human-readable name of the field.
+- `field_id` (String) The key to use in the step's payload_configuration.
+- `is_required` (Boolean) Whether a step performing this action must supply the field.
+- `type` (String) The kind of value the field holds.
+- `values` (List of String) The values the field accepts, when it is a closed set.
