@@ -78,6 +78,11 @@ The following behave differently:
   applied visibility. Set an empty set to hide every status.
 - `anecdotes_requirement.category` — always has a value (default
   `Custom Requirements`); set a different category rather than removing it.
+- `anecdotes_analysis_rule.rule_name` and `rule_message` — the API ignores an
+  empty value on update, so these can be changed but not cleared once set. The
+  apply that removes one fails, because the platform returns the retained value
+  where the plan expected none, and every plan after it reports a difference that
+  cannot be resolved. Set a new value rather than removing the attribute.
 
 Everything else clears normally. Removing `maturity_level` clears the level on
 the platform, setting a description to `""` empties it, and `owners` — on both
@@ -111,6 +116,80 @@ Some operations require a platform feature to be enabled for your tenant. If the
 feature is off, the operation fails at apply with a clear "feature not enabled"
 message (HTTP 402). These are tenant-dependent and cannot be validated at plan
 time.
+
+## Analysis Rules
+
+**Only custom rules can be managed.** `anecdotes_analysis_rule` manages rules the
+account authors (`rule_origin` `custom`). The rules shipped with the platform
+(`rule_origin` `library`) cannot be created, updated or deleted through it, and
+the provider refuses to read one into state — importing a library rule fails with
+an error rather than producing a resource that cannot be applied. Read them with
+the `anecdotes_analysis_rules` data source.
+
+**Deleting archives rather than removes.** The API has no hard delete: destroying
+a rule marks it archived, and it keeps being returned by the underlying read
+endpoints. The provider treats an archived rule as absent, so Terraform converges
+correctly, but the rule remains visible in the Anecdotes application and in the
+`anecdotes_analysis_rules` data source when `include_archived` is set.
+
+**`rule_query` is reparsed by the platform, not merely reformatted.** A rule
+condition is stored with only `operator`, `left` and `right`; any other key is
+discarded. The provider rejects such a query at plan time rather than letting it
+apply as something other than what was written. This covers an `aql` query, and
+the condition under an `aqlext` query's `filters` key, which is stored the same
+way.
+
+**A `pandas` query is stored lower-cased.** The whole expression is lowered,
+quoted values included, so `` `Policy Status` == "Draft" `` is stored as
+`` `policy status` == "draft" ``. The provider rejects a query that is not
+already lower case, because it would otherwise store an expression other than the
+one written. A comparison against mixed-case data cannot be expressed this way.
+
+`aqlext` is a different structure rather than a richer condition: it is built
+from `base`, `manipulations` and `filters`. An `aql`-shaped query submitted as
+`aqlext` is rejected by the platform, so it is not a way to keep keys that `aql`
+discards.
+
+What survives is re-serialized with the platform's own key order and spacing.
+That never shows up as a pending change: the provider recognises a stored query
+that means the same thing as the configured one and leaves the configuration's
+version in state.
+
+Two consequences follow. Editing the key order in your own configuration *does*
+plan an update, because Terraform compares configuration to state as text; the
+apply is harmless. And an imported rule arrives formatted the way the platform
+stores it, since there is no configuration yet to compare against.
+
+Value *types* are compared as written: the platform stores typed values, so a
+quoted boolean or number (`"true"` rather than `true`) produces a difference that
+never settles. Prefer `jsonencode()` over a heredoc string, which gets the types
+right for you.
+
+**`alert_level` accepts more values than a rule should carry.** The API accepts
+3, 5 and 10 in addition to 30 and 50, but those describe the outcome of an
+evaluation rather than a severity a rule raises. The provider rejects them at
+plan time.
+
+**`account_scoping_list` is filtered by the platform.** Only instances of the
+service that collects the rule's evidence are kept, and only while they are
+installed; a request naming none of them is rejected outright. When the platform
+drops an ID the provider reports which one, because the resulting configuration
+would no longer match what was applied.
+
+The `anecdotes_evidences` data source reports `service_instance_ids`, the
+instances that *collected* each evidence. That is a close guide rather than an
+exact list of what a rule will accept: an instance that collected the evidence
+but has since been uninstalled still appears there and is refused by the rule.
+
+The list also cannot be emptied while `account_scoping_type` stays
+`included_accounts` or `excluded_accounts`, for the same reason `rule_name` and
+`rule_message` cannot be cleared. Set `account_scoping_type` to `all_accounts`,
+which clears the list as part of the change.
+
+**`rule_state` is applied by a separate call.** Creating an inactive rule takes a
+create followed by a state change. If the state change fails the rule still
+exists and is recorded in state as active, with a warning; the next apply retries
+it.
 
 ## Enumerated values
 
