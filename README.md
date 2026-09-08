@@ -3,7 +3,7 @@
 Manage the [Anecdotes](https://anecdotes.ai) GRC (Governance, Risk & Compliance)
 compliance program as Infrastructure as Code.
 
-**7 resources** | **11 data sources** | Full create, read, update, delete, and import
+**9 resources** | **13 data sources** | Full create, read, update, delete, and import
 
 ---
 
@@ -100,7 +100,9 @@ anecdotes_framework_folder        # Folder that groups frameworks
 | `anecdotes_control_category` | A category grouping controls in a framework. |
 | `anecdotes_requirement` | An operational requirement. |
 | `anecdotes_mapping_control_requirement` | Links a control to one or more requirements. |
+| `anecdotes_requirement_view` | A requirement scoped beneath a parent requirement. |
 | `anecdotes_mapping_requirement_evidence` | Links a requirement to a piece of evidence. |
+| `anecdotes_analysis_rule` | A query evaluated against one evidence, raising a gap or a warning. |
 
 ## Data Sources
 
@@ -112,6 +114,7 @@ anecdotes_framework_folder        # Folder that groups frameworks
 | `anecdotes_requirement` / `anecdotes_requirements` | Look up one requirement, or list requirements. |
 | `anecdotes_framework_folder` / `anecdotes_framework_folders` | Look up one framework folder, or list them. |
 | `anecdotes_evidences` | List evidence (read-only). |
+| `anecdotes_analysis_rule` / `anecdotes_analysis_rules` | Look up one analysis rule, or list them. |
 
 Per-attribute documentation is generated for every resource and data source under
 [`docs/`](docs/).
