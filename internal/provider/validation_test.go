@@ -146,6 +146,22 @@ resource "anecdotes_playbook" "test" {
 			expectError: regexp.MustCompile(`(?s)Duplicate Step Identifier`),
 		},
 		{
+			name: "playbook step defaulting to webhook requires a url",
+			config: `
+resource "anecdotes_playbook" "test" {
+  title       = "tf-test-validation-playbook"
+  description = "validation"
+
+  steps = [
+    {
+      title         = "step"
+      trigger_event = "ControlStatusChanged"
+    },
+  ]
+}`,
+			expectError: regexp.MustCompile(`(?s)Webhook Step Requires a URL`),
+		},
+		{
 			name: "playbook webhook step requires a url",
 			config: `
 resource "anecdotes_playbook" "test" {

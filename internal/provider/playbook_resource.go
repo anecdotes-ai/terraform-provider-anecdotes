@@ -195,27 +195,42 @@ playbook.
 			"type": schema.StringAttribute{
 				Description: "The type of the automation. Always 'playbook' for this resource.",
 				Computed:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 
 			"status": schema.StringAttribute{
 				Description: "The publication status of the playbook.",
 				Computed:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 
 			"restricted_features": schema.ListAttribute{
 				Description: "Operations the Anecdotes platform restricts on this playbook.",
 				Computed:    true,
 				ElementType: types.StringType,
+				PlanModifiers: []planmodifier.List{
+					listplanmodifier.UseStateForUnknown(),
+				},
 			},
 
 			"created_by": schema.StringAttribute{
 				Description: "The email of the user who created the playbook.",
 				Computed:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 
 			"creation_timestamp": schema.StringAttribute{
 				Description: "When the playbook was created.",
 				Computed:    true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 
 			"last_updated_by": schema.StringAttribute{
@@ -645,11 +660,17 @@ func (r *PlaybookResource) ValidateConfig(ctx context.Context, req resource.Vali
 	}
 
 	// A webhook step posts to its trigger URL, so it cannot run without one.
+	// The configuration is read before schema defaults are applied, so a step
+	// that omits action_type carries no value here and takes the default.
 	for i, step := range steps {
 		if step.ActionType.IsUnknown() || step.URLToTrigger.IsUnknown() {
 			continue
 		}
-		if step.ActionType.ValueString() == webhookActionType && step.URLToTrigger.IsNull() {
+		actionType := step.ActionType.ValueString()
+		if step.ActionType.IsNull() {
+			actionType = webhookActionType
+		}
+		if actionType == webhookActionType && step.URLToTrigger.IsNull() {
 			resp.Diagnostics.AddAttributeError(path.Root("steps").AtListIndex(i).AtName("url_to_trigger"),
 				"Webhook Step Requires a URL",
 				"A step whose action_type is \"webhook\" posts to url_to_trigger, so it must be set.")
