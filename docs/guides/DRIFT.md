@@ -97,8 +97,12 @@ cannot manage at all, are listed in the Known Limitations guide.
 
 ## Protecting objects from deletion
 
-Removing a resource block deletes the object. Guard the ones that must not be
-deleted by accident:
+Removing a resource block deletes the object — with one exception:
+`anecdotes_login_settings` is a singleton whose settings always exist on the
+platform, so removing that resource block only stops Terraform from managing
+them; the tenant's login configuration is left as it was.
+
+Guard objects that must not be deleted by accident:
 
 ```terraform
 resource "anecdotes_framework" "soc2" {
