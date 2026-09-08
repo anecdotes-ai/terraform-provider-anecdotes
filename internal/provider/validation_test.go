@@ -118,6 +118,51 @@ resource "anecdotes_control" "test" {
 			expectError: regexp.MustCompile(`(?s)maturity_level value must be\s+one of`),
 		},
 		{
+			// The step checks must not wait on the schedule checks: a trigger
+			// that is only known after apply must not hide a duplicate id.
+			name: "playbook step identifiers are checked even when a trigger is unknown",
+			config: folderConfig + `
+resource "anecdotes_playbook" "test" {
+  title       = "tf-test-validation-playbook"
+  description = "validation"
+
+  steps = [
+    {
+      step_id        = "11111111-2222-4333-8444-555555555555"
+      title          = "first"
+      trigger_event  = anecdotes_framework_folder.test.folder_id
+      action_type    = "webhook"
+      url_to_trigger = "https://example.com/validation"
+    },
+    {
+      step_id        = "11111111-2222-4333-8444-555555555555"
+      title          = "second"
+      trigger_event  = "ControlStatusChanged"
+      action_type    = "webhook"
+      url_to_trigger = "https://example.com/validation"
+    },
+  ]
+}`,
+			expectError: regexp.MustCompile(`(?s)Duplicate Step Identifier`),
+		},
+		{
+			name: "playbook webhook step requires a url",
+			config: `
+resource "anecdotes_playbook" "test" {
+  title       = "tf-test-validation-playbook"
+  description = "validation"
+
+  steps = [
+    {
+      title         = "step"
+      trigger_event = "ControlStatusChanged"
+      action_type   = "webhook"
+    },
+  ]
+}`,
+			expectError: regexp.MustCompile(`(?s)Webhook Step Requires a URL`),
+		},
+		{
 			name: "playbook step identifiers must be unique",
 			config: `
 resource "anecdotes_playbook" "test" {

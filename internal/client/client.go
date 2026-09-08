@@ -1346,7 +1346,15 @@ func (c *AnecdotesClient) UpdatePlaybook(ctx context.Context, playbookID string,
 		return nil, err
 	}
 
-	return c.GetPlaybook(ctx, playbookID)
+	// The update has been applied at this point. If reading it back fails, the
+	// caller is told so rather than being left to treat an applied change as a
+	// failed one.
+	stored, err := c.GetPlaybook(ctx, playbookID)
+	if err != nil {
+		return nil, fmt.Errorf("the playbook was updated but could not be read back: %w", err)
+	}
+
+	return stored, nil
 }
 
 // DeletePlaybook deletes a playbook and its steps.

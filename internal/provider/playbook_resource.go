@@ -326,7 +326,7 @@ playbook.
 							Description: "What this step does. Defaults to webhook.",
 							Optional:    true,
 							Computed:    true,
-							Default:     stringdefault.StaticString("webhook"),
+							Default:     stringdefault.StaticString(webhookActionType),
 							Validators: []validator.String{
 								stringvalidator.OneOf(client.ValidPlaybookStepActionTypes()...),
 							},
@@ -622,19 +622,18 @@ func (r *PlaybookResource) ValidateConfig(ctx context.Context, req resource.Vali
 		return
 	}
 
-	if steps[0].TriggerEvent.IsUnknown() || data.ScheduleConfig.IsUnknown() {
-		return
-	}
+	// The schedule checks compare the first step's trigger against the schedule,
+	// so they wait until both are resolved. The step checks below do not.
+	scheduleKnown := !steps[0].TriggerEvent.IsUnknown() && !data.ScheduleConfig.IsUnknown()
+	scheduled := scheduleKnown && steps[0].TriggerEvent.ValueString() == client.ScheduledPlaybookTrigger
+	hasSchedule := scheduleKnown && !data.ScheduleConfig.IsNull()
 
-	scheduled := steps[0].TriggerEvent.ValueString() == client.ScheduledPlaybookTrigger
-	hasSchedule := !data.ScheduleConfig.IsNull()
-
-	if hasSchedule && !scheduled {
+	if scheduleKnown && hasSchedule && !scheduled {
 		resp.Diagnostics.AddAttributeError(path.Root("schedule_config"),
 			"Schedule Requires a Scheduled Trigger",
 			fmt.Sprintf("schedule_config is only valid when the first step's trigger_event is %q.", client.ScheduledPlaybookTrigger))
 	}
-	if scheduled && !hasSchedule {
+	if scheduleKnown && scheduled && !hasSchedule {
 		resp.Diagnostics.AddAttributeError(path.Root("schedule_config"),
 			"Scheduled Trigger Requires a Schedule",
 			fmt.Sprintf("A first step triggered by %q requires schedule_config to be set.", client.ScheduledPlaybookTrigger))
@@ -643,6 +642,18 @@ func (r *PlaybookResource) ValidateConfig(ctx context.Context, req resource.Vali
 		resp.Diagnostics.AddAttributeError(path.Root("steps").AtListIndex(0).AtName("filter_configuration"),
 			"Filter Is Owned by the Platform",
 			"The first step of a scheduled playbook is filtered to that playbook's schedule, so filter_configuration cannot be set on it.")
+	}
+
+	// A webhook step posts to its trigger URL, so it cannot run without one.
+	for i, step := range steps {
+		if step.ActionType.IsUnknown() || step.URLToTrigger.IsUnknown() {
+			continue
+		}
+		if step.ActionType.ValueString() == webhookActionType && step.URLToTrigger.IsNull() {
+			resp.Diagnostics.AddAttributeError(path.Root("steps").AtListIndex(i).AtName("url_to_trigger"),
+				"Webhook Step Requires a URL",
+				"A step whose action_type is \"webhook\" posts to url_to_trigger, so it must be set.")
+		}
 	}
 
 	// A step may be chained to another step in the same playbook. An id that
@@ -931,6 +942,9 @@ func configurationFromMap(configuration map[string]interface{}, diags *diag.Diag
 func isUUID(s string) bool {
 	return uuidPattern.MatchString(s)
 }
+
+// webhookActionType is the action that posts to an outbound URL.
+const webhookActionType = "webhook"
 
 var uuidPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 

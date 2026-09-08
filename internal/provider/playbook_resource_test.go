@@ -584,3 +584,68 @@ resource "anecdotes_playbook" "test" {
 		},
 	})
 }
+
+// Converting a step from an outbound webhook to an internal action: Terraform
+// reports the step as internal and holds no trigger URL for it, and the change
+// settles without a pending diff.
+func TestAccPlaybookResource_convertsWebhookToInternalAction(t *testing.T) {
+	title := randomName("pb-convert")
+
+	step := func(action, url string) string {
+		return fmt.Sprintf(`
+resource "anecdotes_playbook" "test" {
+  title       = %q
+  description = "action conversion"
+
+  steps = [
+    {
+      title         = "step"
+      trigger_event = "ControlStatusChanged"
+      action_type   = %q
+      %s
+    },
+  ]
+}`, title, action, url)
+	}
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: step("webhook", `url_to_trigger = "https://example.com/tf-acc-convert"`),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("anecdotes_playbook.test", "steps.0.internal_action", "false"),
+					resource.TestCheckResourceAttr("anecdotes_playbook.test", "steps.0.url_to_trigger", "https://example.com/tf-acc-convert"),
+				),
+			},
+			{
+				// Dropping the URL and moving to an internal action.
+				Config: step("create_comment", ``),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("anecdotes_playbook.test", "steps.0.action_type", "create_comment"),
+					resource.TestCheckResourceAttr("anecdotes_playbook.test", "steps.0.internal_action", "true"),
+					resource.TestCheckNoResourceAttr("anecdotes_playbook.test", "steps.0.url_to_trigger"),
+					func(s *terraform.State) error {
+						id, err := stateAttr(s, "anecdotes_playbook.test", "playbook_id")
+						if err != nil {
+							return err
+						}
+						playbook, err := testAccNewClient(t).GetPlaybook(context.Background(), id)
+						if err != nil {
+							return fmt.Errorf("reading playbook %s: %w", id, err)
+						}
+						if !playbook.Steps[0].InternalAction {
+							return fmt.Errorf("the platform still reports the step as an outbound webhook")
+						}
+						return nil
+					},
+				),
+			},
+			{
+				Config:   step("create_comment", ``),
+				PlanOnly: true,
+			},
+		},
+	})
+}
