@@ -10,8 +10,10 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
+	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 )
 
 // testCheckPlaybookStepOnPlatform reads the playbook straight from the API
@@ -645,6 +647,59 @@ resource "anecdotes_playbook" "test" {
 			{
 				Config:   step("create_comment", ``),
 				PlanOnly: true,
+			},
+		},
+	})
+}
+
+// The fields the platform writes once are reported as they stand while an
+// unrelated change is planned, rather than as pending. The fields that change
+// on every write, and the step's own run history, are left to resolve.
+func TestAccPlaybookResource_updatePlanKeepsSettledFields(t *testing.T) {
+	title := randomName("pb-plan")
+
+	config := func(description string) string {
+		return fmt.Sprintf(`
+resource "anecdotes_playbook" "test" {
+  title       = %q
+  description = %q
+
+  steps = [
+    {
+      title          = "step"
+      trigger_event  = "ControlStatusChanged"
+      action_type    = "webhook"
+      url_to_trigger = "https://example.com/tf-acc-plan"
+    },
+  ]
+}`, title, description)
+	}
+
+	settled := func(attr string) plancheck.PlanCheck {
+		return plancheck.ExpectKnownValue("anecdotes_playbook.test", tfjsonpath.New(attr), knownvalue.NotNull())
+	}
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{Config: config("first")},
+			{
+				Config: config("second"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						settled("playbook_id"),
+						settled("type"),
+						settled("status"),
+						settled("created_by"),
+						settled("creation_timestamp"),
+						settled("restricted_features"),
+						plancheck.ExpectKnownValue("anecdotes_playbook.test",
+							tfjsonpath.New("steps").AtSliceIndex(0).AtMapKey("step_id"), knownvalue.NotNull()),
+						plancheck.ExpectKnownValue("anecdotes_playbook.test",
+							tfjsonpath.New("steps").AtSliceIndex(0).AtMapKey("internal_action"), knownvalue.Bool(false)),
+					},
+				},
 			},
 		},
 	})
