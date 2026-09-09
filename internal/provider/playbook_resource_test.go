@@ -7,7 +7,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
@@ -324,8 +326,13 @@ resource "anecdotes_playbook" "test" {
 					resource.TestCheckResourceAttr("anecdotes_playbook.test", "schedule_config.period", "week"),
 					resource.TestCheckResourceAttr("anecdotes_playbook.test", "schedule_config.time", "09:30"),
 					resource.TestCheckResourceAttr("anecdotes_playbook.test", "schedule_config.timezone", "America/New_York"),
+					// A schedule is stored in coordinated universal time, so the
+					// recorded form differs from the written one while naming the
+					// same instant.
+					testCheckSameInstant("anecdotes_playbook.test", "schedule_config.start_date", "2026-09-07T00:00:00Z"),
 					// end_date is derived from start_date and ends_in.
 					resource.TestCheckResourceAttrSet("anecdotes_playbook.test", "schedule_config.end_date"),
+					testCheckSameInstant("anecdotes_playbook.test", "schedule_config.end_date", "2026-10-07T00:00:00Z"),
 				),
 			},
 			{
@@ -702,5 +709,119 @@ resource "anecdotes_playbook" "test" {
 				},
 			},
 		},
+	})
+}
+
+// testCheckJSONAttr compares a JSON attribute semantically, so a difference in
+// key order is not reported as a difference in value.
+func testCheckJSONAttr(resourceAddr, attr, want string) resource.TestCheckFunc {
+	return resource.TestCheckResourceAttrWith(resourceAddr, attr, func(got string) error {
+		var a, b interface{}
+		if err := json.Unmarshal([]byte(got), &a); err != nil {
+			return fmt.Errorf("%s is not JSON: %s", attr, got)
+		}
+		if err := json.Unmarshal([]byte(want), &b); err != nil {
+			return fmt.Errorf("the expected value is not JSON: %s", want)
+		}
+		if !reflect.DeepEqual(a, b) {
+			return fmt.Errorf("%s is %s, expected %s", attr, got, want)
+		}
+		return nil
+	})
+}
+
+// Every attribute the resource declares is read back into state, and the ones
+// the configuration owns match the platform. A field that is only ever written
+// and never asserted is a field whose mapping nothing checks.
+func TestAccPlaybookResource_everyFieldIsReadBack(t *testing.T) {
+	title := randomName("pb-fields")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: fmt.Sprintf(`
+resource "anecdotes_playbook" "test" {
+  title       = %q
+  description = "every field"
+
+  steps = [
+    {
+      step_id        = "7c9e6679-7425-40de-944b-e07fc1f90ae7"
+      title          = "the step"
+      trigger_event  = "ControlStatusChanged"
+      action_type    = "webhook"
+      url_to_trigger = "https://example.com/tf-acc-fields"
+
+      filter_configuration  = jsonencode({ left = "extra_payload.new", operator = "IsIn", right = ["IN_PROGRESS"] })
+      payload_configuration = jsonencode({ control = "{{ extra_payload.control_name }}" })
+      headers_configuration = jsonencode({ "X-Source" = "terraform" })
+    },
+  ]
+}`, title),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					// Terraform owns these.
+					resource.TestCheckResourceAttr("anecdotes_playbook.test", "title", title),
+					resource.TestCheckResourceAttr("anecdotes_playbook.test", "description", "every field"),
+					resource.TestCheckResourceAttr("anecdotes_playbook.test", "active", "true"),
+
+					// The platform owns these.
+					resource.TestCheckResourceAttrSet("anecdotes_playbook.test", "playbook_id"),
+					resource.TestCheckResourceAttr("anecdotes_playbook.test", "type", "playbook"),
+					resource.TestCheckResourceAttr("anecdotes_playbook.test", "status", "published"),
+					resource.TestCheckResourceAttr("anecdotes_playbook.test", "restricted_features.#", "0"),
+					resource.TestCheckResourceAttrSet("anecdotes_playbook.test", "created_by"),
+					resource.TestCheckResourceAttrSet("anecdotes_playbook.test", "creation_timestamp"),
+					resource.TestCheckResourceAttrSet("anecdotes_playbook.test", "last_updated_by"),
+					resource.TestCheckResourceAttrSet("anecdotes_playbook.test", "last_update_timestamp"),
+					resource.TestCheckNoResourceAttr("anecdotes_playbook.test", "schedule_config"),
+
+					// Every step attribute.
+					resource.TestCheckResourceAttr("anecdotes_playbook.test", "steps.#", "1"),
+					resource.TestCheckResourceAttr("anecdotes_playbook.test", "steps.0.step_id", "7c9e6679-7425-40de-944b-e07fc1f90ae7"),
+					resource.TestCheckResourceAttr("anecdotes_playbook.test", "steps.0.title", "the step"),
+					resource.TestCheckResourceAttr("anecdotes_playbook.test", "steps.0.trigger_event", "ControlStatusChanged"),
+					resource.TestCheckResourceAttr("anecdotes_playbook.test", "steps.0.action_type", "webhook"),
+					resource.TestCheckResourceAttr("anecdotes_playbook.test", "steps.0.url_to_trigger", "https://example.com/tf-acc-fields"),
+					resource.TestCheckResourceAttr("anecdotes_playbook.test", "steps.0.internal_action", "false"),
+					resource.TestCheckResourceAttr("anecdotes_playbook.test", "steps.0.last_run_status", "NotRun"),
+					resource.TestCheckNoResourceAttr("anecdotes_playbook.test", "steps.0.last_run_timestamp"),
+					testCheckJSONAttr("anecdotes_playbook.test", "steps.0.filter_configuration",
+						`{"left":"extra_payload.new","operator":"IsIn","right":["IN_PROGRESS"]}`),
+					testCheckJSONAttr("anecdotes_playbook.test", "steps.0.payload_configuration",
+						`{"control":"{{ extra_payload.control_name }}"}`),
+					testCheckJSONAttr("anecdotes_playbook.test", "steps.0.headers_configuration",
+						`{"X-Source":"terraform"}`),
+
+					// The platform holds what the configuration says, not just state.
+					testCheckPlaybookStepOnPlatform(t, "anecdotes_playbook.test", 0, map[string]string{
+						"step_title":          "the step",
+						"step_trigger_event":  "ControlStatusChanged",
+						"step_action_type":    "webhook",
+						"step_url_to_trigger": "https://example.com/tf-acc-fields",
+					}),
+				),
+			},
+		},
+	})
+}
+
+// testCheckSameInstant compares a timestamp attribute by the moment it names,
+// so a difference in offset is not reported as a difference in value.
+func testCheckSameInstant(resourceAddr, attr, want string) resource.TestCheckFunc {
+	return resource.TestCheckResourceAttrWith(resourceAddr, attr, func(got string) error {
+		gotTime, err := time.Parse(time.RFC3339, got)
+		if err != nil {
+			return fmt.Errorf("%s is not an RFC 3339 timestamp: %s", attr, got)
+		}
+		wantTime, err := time.Parse(time.RFC3339, want)
+		if err != nil {
+			return fmt.Errorf("the expected value is not an RFC 3339 timestamp: %s", want)
+		}
+		if !gotTime.Equal(wantTime) {
+			return fmt.Errorf("%s is %s, which is not the same moment as %s", attr, got, want)
+		}
+		return nil
 	})
 }
