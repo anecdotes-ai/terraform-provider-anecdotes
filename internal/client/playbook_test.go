@@ -157,3 +157,25 @@ func TestListPlaybooks_ParsesSteps(t *testing.T) {
 		t.Errorf("payload_configuration must decode into a map, got %v", got)
 	}
 }
+
+func TestUpdatePlaybook_ClearsTheTriggerURLOfAnInternalStep(t *testing.T) {
+	srv, captured := playbookServer(t, onePlaybook)
+
+	internal := true
+	_, err := newTestClient(t, srv).UpdatePlaybook(context.Background(), "pb1", &PlaybookUpdateRequest{
+		Steps: []PlaybookStepUpdate{{
+			StepID:            "s1",
+			InternalAction:    &internal,
+			ClearURLToTrigger: true,
+		}},
+	})
+	if err != nil {
+		t.Fatalf("UpdatePlaybook: %v", err)
+	}
+
+	// Omitting the field leaves the address the step used to post to in place,
+	// so a step that stops posting to a URL must send an explicit null.
+	if !strings.Contains(string(*captured), `"step_url_to_trigger":null`) {
+		t.Errorf("an internal step must clear its trigger URL, got %s", *captured)
+	}
+}

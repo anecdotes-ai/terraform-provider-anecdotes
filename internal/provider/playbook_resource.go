@@ -562,6 +562,7 @@ func (r *PlaybookResource) Update(ctx context.Context, req resource.UpdateReques
 
 		update := client.PlaybookStepUpdate{
 			StepID:               stepID,
+			ClearURLToTrigger:    internal,
 			StepTitle:            &title,
 			StepTriggerEvent:     &trigger,
 			StepActionType:       &action,

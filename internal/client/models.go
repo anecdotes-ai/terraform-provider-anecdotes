@@ -4,6 +4,7 @@
 package client
 
 import (
+	"encoding/json"
 	"time"
 )
 
@@ -607,8 +608,12 @@ type PlaybookUpdateRequest struct {
 }
 
 // PlaybookStepUpdate is a step as supplied on update. A nil configuration is
-// left unchanged; an empty one clears it.
+// left unchanged; an empty one clears it. ClearURLToTrigger sends the trigger
+// URL as null, which the platform resolves to its own internal address: a step
+// that stops posting to a URL keeps the old one otherwise.
 type PlaybookStepUpdate struct {
+	ClearURLToTrigger bool `json:"-"`
+
 	StepID               string                  `json:"step_id"`
 	StepTitle            *string                 `json:"step_title,omitempty"`
 	StepTriggerEvent     *string                 `json:"step_trigger_event,omitempty"`
@@ -709,3 +714,22 @@ func ValidPlaybookScheduleEndsIn() []string {
 
 // ScheduledPlaybookTrigger is the trigger event of a scheduled playbook's first step.
 const ScheduledPlaybookTrigger = "ScheduledPlaybookTriggered"
+
+// MarshalJSON sends step_url_to_trigger as null when the step is being cleared,
+// which "omitempty" on a nil pointer cannot express.
+func (s PlaybookStepUpdate) MarshalJSON() ([]byte, error) {
+	type stepUpdate PlaybookStepUpdate
+
+	encoded, err := json.Marshal(stepUpdate(s))
+	if err != nil || !s.ClearURLToTrigger {
+		return encoded, err
+	}
+
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(encoded, &fields); err != nil {
+		return nil, err
+	}
+	fields["step_url_to_trigger"] = json.RawMessage("null")
+
+	return json.Marshal(fields)
+}

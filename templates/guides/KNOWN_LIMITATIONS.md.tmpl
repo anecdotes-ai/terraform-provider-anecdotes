@@ -130,17 +130,6 @@ The three step configuration attributes are optional and computed, so removing
 one from the configuration leaves the stored value untouched rather than
 clearing it. Set it to `jsonencode({})` to clear it.
 
-## Converting a playbook step to an internal action leaves its old trigger URL stored
-
-Removing `url_to_trigger` from a step and giving it an internal action reports the
-step as internal and clears the URL from Terraform state, which is what the
-platform reports on read. The URL the step previously posted to is still held
-underneath, because the update that marks a step internal does not clear it.
-
-Nothing observable depends on it: the step runs its internal action, and the URL
-is neither read nor reported. It is recorded here because the stored value and
-the reported value differ.
-
 ## Playbooks are read by listing them
 
 The platform has no endpoint that reads a single playbook, so every read fetches
