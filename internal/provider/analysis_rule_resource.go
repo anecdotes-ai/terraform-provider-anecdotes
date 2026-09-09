@@ -206,6 +206,11 @@ source to read them.
 			"rule_origin": schema.StringAttribute{
 				Description: "Whether the rule ships with the platform (\"library\") or is authored by the account (\"custom\").",
 				Computed:    true,
+				// A rule's origin is fixed when it is created, so keeping the
+				// known value stops every update reporting it as pending.
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"last_updated": schema.StringAttribute{
 				Description: "When the rule was last modified.",
