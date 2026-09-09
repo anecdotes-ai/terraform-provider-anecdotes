@@ -12,8 +12,10 @@ import (
 
 	"github.com/anecdotes-ai/terraform-provider-anecdotes/internal/client"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
 	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
+	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 )
 
 const testAQLQuery = `{"left":"Min Password Length","operator":"IsIn","right":["1","2"]}`
@@ -513,6 +515,106 @@ resource "anecdotes_analysis_rule" "pandas" {
 }
 `, testAccEvidenceID(), randomName("tf-acc-rule-pandas-case")),
 				ExpectError: regexp.MustCompile(`Rule Query Must Be Lower Case`),
+			},
+		},
+	})
+}
+
+// TestAccAnalysisRule_attributeSurface asserts every attribute the resource
+// exposes, including the ones no scenario test happens to touch. A test that
+// only sets an attribute in HCL proves nothing about how it is read back.
+func TestAccAnalysisRule_attributeSurface(t *testing.T) {
+	name := randomName("tf-acc-rule-surface")
+	const addr = "anecdotes_analysis_rule.surface"
+
+	config := fmt.Sprintf(`
+resource "anecdotes_analysis_rule" "surface" {
+  evidence_id     = %[1]q
+  rule_name       = %[2]q
+  rule_message    = "every attribute is asserted"
+  alert_level     = 30
+  rule_query_type = "aql"
+  rule_query      = %[3]q
+  rule_type       = "eid"
+  library_rule_id = "library-rule-reference"
+  rule_state      = "inactive"
+
+  account_scoping_type = "all_accounts"
+}
+`, testAccEvidenceID(), name, testAQLQuery)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccEvidencePreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: config,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					// Terraform-owned
+					resource.TestCheckResourceAttr(addr, "evidence_id", testAccEvidenceID()),
+					resource.TestCheckResourceAttr(addr, "rule_name", name),
+					resource.TestCheckResourceAttr(addr, "rule_message", "every attribute is asserted"),
+					resource.TestCheckResourceAttr(addr, "alert_level", "30"),
+					resource.TestCheckResourceAttr(addr, "rule_query_type", "aql"),
+					resource.TestCheckResourceAttr(addr, "rule_type", "eid"),
+					resource.TestCheckResourceAttr(addr, "library_rule_id", "library-rule-reference"),
+					resource.TestCheckResourceAttr(addr, "rule_state", "inactive"),
+					resource.TestCheckResourceAttr(addr, "account_scoping_type", "all_accounts"),
+					// The query is JSON, so it is compared as JSON rather than text.
+					testCheckJSONAttr(addr, "rule_query", testAQLQuery),
+					// Platform-owned
+					resource.TestCheckResourceAttrSet(addr, "rule_id"),
+					resource.TestCheckResourceAttrSet(addr, "rule_query_str"),
+					resource.TestCheckResourceAttrSet(addr, "last_updated"),
+					resource.TestCheckResourceAttrSet(addr, "last_updated_by"),
+					resource.TestCheckResourceAttr(addr, "rule_origin", "custom"),
+					// The platform does not set a query message when a rule is
+					// created, so the attribute is absent rather than empty.
+					resource.TestCheckNoResourceAttr(addr, "rule_query_message"),
+					testCheckAnalysisRuleOnPlatform(t, addr, func(rule *client.AnalysisRule) error {
+						if rule.RuleType != "eid" {
+							return fmt.Errorf("rule_type = %q, want eid", rule.RuleType)
+						}
+						if rule.LibraryRuleID != "library-rule-reference" {
+							return fmt.Errorf("library_rule_id = %q, want library-rule-reference", rule.LibraryRuleID)
+						}
+						if rule.RuleMessage != "every attribute is asserted" {
+							return fmt.Errorf("rule_message = %q", rule.RuleMessage)
+						}
+						return nil
+					}),
+				),
+			},
+		},
+	})
+}
+
+// TestAccAnalysisRule_writeOnceAttributesSettleOnUpdate: an unchanged plan being
+// empty says nothing about what an update reports. The attributes the platform
+// writes once must already be known while planning an update, or every change
+// reports them as pending.
+func TestAccAnalysisRule_writeOnceAttributesSettleOnUpdate(t *testing.T) {
+	const addr = "anecdotes_analysis_rule.test"
+	name := randomName("tf-acc-rule-settled")
+
+	settled := func(attr string) plancheck.PlanCheck {
+		return plancheck.ExpectKnownValue(addr, tfjsonpath.New(attr), knownvalue.NotNull())
+	}
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccEvidencePreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{Config: testAccAnalysisRuleConfig(name, testAQLQuery, "")},
+			{
+				Config: testAccAnalysisRuleConfig(name+"-renamed", testAQLQuery, ""),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						settled("rule_id"),
+						settled("evidence_id"),
+						settled("rule_origin"),
+					},
+				},
 			},
 		},
 	})
