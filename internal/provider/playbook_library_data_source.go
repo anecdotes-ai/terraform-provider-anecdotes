@@ -5,7 +5,6 @@ package provider
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	"github.com/anecdotes-ai/terraform-provider-anecdotes/internal/client"
@@ -175,20 +174,7 @@ Use ` + "`trigger_value`" + ` as the ` + "`trigger_event`" + ` of a step: it is 
 }
 
 func (d *PlaybookLibraryDataSource) Configure(ctx context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
-	if req.ProviderData == nil {
-		return
-	}
-
-	client, ok := req.ProviderData.(*client.AnecdotesClient)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Unexpected Data Source Configure Type",
-			fmt.Sprintf("Expected *client.AnecdotesClient, got: %T. Please report this issue to the provider developers.", req.ProviderData),
-		)
-		return
-	}
-
-	d.client = client
+	d.client = configureClient(req.ProviderData, "Data Source", &resp.Diagnostics)
 }
 
 func (d *PlaybookLibraryDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
