@@ -619,3 +619,84 @@ func TestAccAnalysisRule_writeOnceAttributesSettleOnUpdate(t *testing.T) {
 		},
 	})
 }
+
+// TestAccAnalysisRule_immutableFieldsReplace covers the attributes that cannot be
+// changed on an existing rule. Each must plan a replacement: the platform ignores
+// them on update, so a change that planned as an update would appear to succeed
+// while leaving the rule as it was.
+func TestAccAnalysisRule_immutableFieldsReplace(t *testing.T) {
+	const addr = "anecdotes_analysis_rule.test"
+	name := randomName("tf-acc-rule-replace")
+
+	replaced := resource.ConfigPlanChecks{
+		PreApply: []plancheck.PlanCheck{
+			plancheck.ExpectResourceAction(addr, plancheck.ResourceActionDestroyBeforeCreate),
+		},
+	}
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccEvidencePreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{Config: testAccAnalysisRuleConfig(name, testAQLQuery, "")},
+			{
+				// rule_type is not applied on update.
+				Config:           testAccAnalysisRuleConfig(name, testAQLQuery, `  rule_type = "uam"`),
+				ConfigPlanChecks: replaced,
+				Check:            resource.TestCheckResourceAttr(addr, "rule_type", "uam"),
+			},
+			{
+				// library_rule_id is recorded once, at creation.
+				Config:           testAccAnalysisRuleConfig(name, testAQLQuery, "  rule_type = \"uam\"\n  library_rule_id = \"some-library-rule\""),
+				ConfigPlanChecks: replaced,
+				Check:            resource.TestCheckResourceAttr(addr, "library_rule_id", "some-library-rule"),
+			},
+			{
+				// The query language decides how the query is read, so it cannot
+				// change under an existing query.
+				Config: fmt.Sprintf(`
+resource "anecdotes_analysis_rule" "test" {
+  evidence_id     = %[1]q
+  rule_name       = %[2]q
+  rule_query_type = "aqlext"
+  rule_query      = %[3]q
+}
+`, testAccEvidenceID(), name, `{"manipulations":[]}`),
+				ConfigPlanChecks: replaced,
+				Check:            resource.TestCheckResourceAttr(addr, "rule_query_type", "aqlext"),
+			},
+		},
+	})
+}
+
+// TestAccAnalysisRule_rejectsInvalidEnumValues checks each enumerated attribute
+// refuses a value outside its set while planning, rather than storing something
+// the platform will not act on.
+func TestAccAnalysisRule_rejectsInvalidEnumValues(t *testing.T) {
+	cases := []struct {
+		name  string
+		extra string
+		want  string
+	}{
+		{"alert level outside the settable pair", "  alert_level = 10", `alert_level value must be one of`},
+		{"unknown query language", `  rule_query_type = "sql"`, `rule_query_type value must be one of`},
+		{"unknown rule type", `  rule_type = "unknown"`, `rule_type value must be one of`},
+		{"unknown rule state", `  rule_state = "paused"`, `rule_state value must be one of`},
+		{"unknown scoping type", `  account_scoping_type = "some_accounts"`, `account_scoping_type value must be one of`},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			resource.Test(t, resource.TestCase{
+				PreCheck:                 func() { testAccEvidencePreCheck(t) },
+				ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+				Steps: []resource.TestStep{
+					{
+						Config:      testAccAnalysisRuleConfig(randomName("tf-acc-rule-enum"), testAQLQuery, tc.extra),
+						ExpectError: regexp.MustCompile(tc.want),
+					},
+				},
+			})
+		})
+	}
+}
