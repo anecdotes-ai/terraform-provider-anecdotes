@@ -353,6 +353,9 @@ playbook.
 						"internal_action": schema.BoolAttribute{
 							Description: "Whether the step runs inside the Anecdotes platform rather than posting to an external URL. Derived from url_to_trigger.",
 							Computed:    true,
+							PlanModifiers: []planmodifier.Bool{
+								internalActionFromURL{},
+							},
 						},
 						"filter_configuration": schema.StringAttribute{
 							Description: "A JSON object restricting which events run this step. Owned by the platform on a scheduled playbook's first step.",
@@ -1136,4 +1139,27 @@ func parseAPITimestamp(value string, diags *diag.Diagnostics) timetypes.RFC3339 
 		return timetypes.NewRFC3339Null()
 	}
 	return parsed
+}
+
+// internalActionFromURL plans internal_action from the step's trigger URL, the
+// same way it is derived when the step is written. Pinning it to the recorded
+// value instead would report a step as external after it has been converted.
+type internalActionFromURL struct{}
+
+func (m internalActionFromURL) Description(ctx context.Context) string {
+	return "derived from url_to_trigger"
+}
+
+func (m internalActionFromURL) MarkdownDescription(ctx context.Context) string {
+	return m.Description(ctx)
+}
+
+func (m internalActionFromURL) PlanModifyBool(ctx context.Context, req planmodifier.BoolRequest, resp *planmodifier.BoolResponse) {
+	var url types.String
+	resp.Diagnostics.Append(req.Plan.GetAttribute(ctx, req.Path.ParentPath().AtName("url_to_trigger"), &url)...)
+	if resp.Diagnostics.HasError() || url.IsUnknown() {
+		return
+	}
+
+	resp.PlanValue = types.BoolValue(url.IsNull())
 }
