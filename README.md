@@ -3,7 +3,7 @@
 Manage the [Anecdotes](https://anecdotes.ai) GRC (Governance, Risk & Compliance)
 compliance program as Infrastructure as Code.
 
-**7 resources** | **11 data sources** | Full create, read, update, delete, and import
+**9 resources** | **13 data sources** | Full create, read, update, delete, and import
 
 ---
 
@@ -101,6 +101,8 @@ anecdotes_framework_folder        # Folder that groups frameworks
 | `anecdotes_requirement` | An operational requirement. |
 | `anecdotes_mapping_control_requirement` | Links a control to one or more requirements. |
 | `anecdotes_mapping_requirement_evidence` | Links a requirement to a piece of evidence. |
+| `anecdotes_requirement_view` | A requirement scoped beneath a parent requirement, letting the same content apply per control or framework without duplicating it. |
+| `anecdotes_playbook` | An automation that runs steps on a platform event or a schedule. |
 
 ## Data Sources
 
@@ -109,9 +111,11 @@ anecdotes_framework_folder        # Folder that groups frameworks
 | `anecdotes_framework` / `anecdotes_frameworks` | Look up one framework, or list frameworks. |
 | `anecdotes_control` / `anecdotes_controls` | Look up one control, or list controls in a framework. |
 | `anecdotes_control_category` / `anecdotes_control_categories` | Look up one control category, or list them. |
-| `anecdotes_requirement` / `anecdotes_requirements` | Look up one requirement, or list requirements. |
+| `anecdotes_requirement` / `anecdotes_requirements` | Look up one requirement, or list requirements. Both report `parent_id` and `view_name`, so a requirement view is read through these rather than through a data source of its own. |
 | `anecdotes_framework_folder` / `anecdotes_framework_folders` | Look up one framework folder, or list them. |
 | `anecdotes_evidences` | List evidence (read-only). |
+| `anecdotes_playbook_library` | List the trigger events a playbook step can subscribe to. |
+| `anecdotes_playbook_action_library` | List the actions a playbook step can perform. |
 
 Per-attribute documentation is generated for every resource and data source under
 [`docs/`](docs/).

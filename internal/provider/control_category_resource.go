@@ -5,7 +5,6 @@ package provider
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/anecdotes-ai/terraform-provider-anecdotes/internal/client"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
@@ -80,20 +79,7 @@ Control categories are used to organize controls within a framework. Each contro
 }
 
 func (r *ControlCategoryResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
-	if req.ProviderData == nil {
-		return
-	}
-
-	client, ok := req.ProviderData.(*client.AnecdotesClient)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *client.AnecdotesClient, got: %T. Please report this issue to the provider developers.", req.ProviderData),
-		)
-		return
-	}
-
-	r.client = client
+	r.client = configureClient(req.ProviderData, "Resource", &resp.Diagnostics)
 }
 
 func (r *ControlCategoryResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {

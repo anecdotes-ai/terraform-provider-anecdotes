@@ -704,3 +704,118 @@ resource "anecdotes_requirement_view" "test" {
 		},
 	})
 }
+
+// TestAccDrift_PlaybookStepEditReverted: a step edited in the application must
+// surface as drift and be set back to what the configuration says.
+func TestAccDrift_PlaybookStepEditReverted(t *testing.T) {
+	title := randomName("pb-drift")
+
+	config := fmt.Sprintf(`
+resource "anecdotes_playbook" "test" {
+  title       = %q
+  description = "Managed by Terraform"
+
+  steps = [
+    {
+      title          = "managed step"
+      trigger_event  = "ControlStatusChanged"
+      action_type    = "webhook"
+      url_to_trigger = "https://example.com/tf-drift"
+    },
+  ]
+}`, title)
+
+	var playbookID, stepID string
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: config,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("anecdotes_playbook.test", "steps.0.title", "managed step"),
+					func(s *terraform.State) error {
+						id, err := stateAttr(s, "anecdotes_playbook.test", "playbook_id")
+						if err != nil {
+							return err
+						}
+						playbookID = id
+						stepID, err = stateAttr(s, "anecdotes_playbook.test", "steps.0.step_id")
+						return err
+					},
+				),
+			},
+			{
+				PreConfig: func() {
+					c := testAccNewClient(t)
+					changed := "Changed outside Terraform"
+					_, err := c.UpdatePlaybook(context.Background(), playbookID, &client.PlaybookUpdateRequest{
+						Steps: []client.PlaybookStepUpdate{{StepID: stepID, StepTitle: &changed}},
+					})
+					if err != nil {
+						t.Fatalf("out-of-band step change failed: %v", err)
+					}
+				},
+				Config: config,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("anecdotes_playbook.test", "steps.0.title", "managed step"),
+				),
+			},
+		},
+	})
+}
+
+// TestAccDrift_PlaybookDisabledOutOfBandReverted: disabling a playbook in the
+// application must surface as drift and be re-enabled on apply.
+func TestAccDrift_PlaybookDisabledOutOfBandReverted(t *testing.T) {
+	title := randomName("pb-drift-active")
+
+	config := fmt.Sprintf(`
+resource "anecdotes_playbook" "test" {
+  title       = %q
+  description = "Managed by Terraform"
+  active      = true
+
+  steps = [
+    {
+      title          = "managed step"
+      trigger_event  = "ControlStatusChanged"
+      action_type    = "webhook"
+      url_to_trigger = "https://example.com/tf-drift-active"
+    },
+  ]
+}`, title)
+
+	var playbookID string
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: config,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("anecdotes_playbook.test", "active", "true"),
+					func(s *terraform.State) error {
+						id, err := stateAttr(s, "anecdotes_playbook.test", "playbook_id")
+						playbookID = id
+						return err
+					},
+				),
+			},
+			{
+				PreConfig: func() {
+					c := testAccNewClient(t)
+					inactive := false
+					if _, err := c.UpdatePlaybook(context.Background(), playbookID,
+						&client.PlaybookUpdateRequest{Active: &inactive}); err != nil {
+						t.Fatalf("out-of-band disable failed: %v", err)
+					}
+				},
+				Config: config,
+				Check:  resource.TestCheckResourceAttr("anecdotes_playbook.test", "active", "true"),
+			},
+		},
+	})
+}

@@ -118,6 +118,166 @@ resource "anecdotes_control" "test" {
 			expectError: regexp.MustCompile(`(?s)maturity_level value must be\s+one of`),
 		},
 		{
+			// The step checks must not wait on the schedule checks: a trigger
+			// that is only known after apply must not hide a duplicate id.
+			name: "playbook step identifiers are checked even when a trigger is unknown",
+			config: folderConfig + `
+resource "anecdotes_playbook" "test" {
+  title       = "tf-test-validation-playbook"
+  description = "validation"
+
+  steps = [
+    {
+      step_id        = "11111111-2222-4333-8444-555555555555"
+      title          = "first"
+      trigger_event  = anecdotes_framework_folder.test.folder_id
+      action_type    = "webhook"
+      url_to_trigger = "https://example.com/validation"
+    },
+    {
+      step_id        = "11111111-2222-4333-8444-555555555555"
+      title          = "second"
+      trigger_event  = "ControlStatusChanged"
+      action_type    = "webhook"
+      url_to_trigger = "https://example.com/validation"
+    },
+  ]
+}`,
+			expectError: regexp.MustCompile(`(?s)Duplicate Step Identifier`),
+		},
+		{
+			name: "playbook step defaulting to webhook requires a url",
+			config: `
+resource "anecdotes_playbook" "test" {
+  title       = "tf-test-validation-playbook"
+  description = "validation"
+
+  steps = [
+    {
+      title         = "step"
+      trigger_event = "ControlStatusChanged"
+    },
+  ]
+}`,
+			expectError: regexp.MustCompile(`(?s)Webhook Step Requires a URL`),
+		},
+		{
+			name: "playbook webhook step requires a url",
+			config: `
+resource "anecdotes_playbook" "test" {
+  title       = "tf-test-validation-playbook"
+  description = "validation"
+
+  steps = [
+    {
+      title         = "step"
+      trigger_event = "ControlStatusChanged"
+      action_type   = "webhook"
+    },
+  ]
+}`,
+			expectError: regexp.MustCompile(`(?s)Webhook Step Requires a URL`),
+		},
+		{
+			name: "playbook step identifiers must be unique",
+			config: `
+resource "anecdotes_playbook" "test" {
+  title       = "tf-test-validation-playbook"
+  description = "validation"
+
+  steps = [
+    {
+      step_id        = "11111111-2222-4333-8444-555555555555"
+      title          = "first"
+      trigger_event  = "ControlStatusChanged"
+      action_type    = "webhook"
+      url_to_trigger = "https://example.com/validation"
+    },
+    {
+      step_id        = "11111111-2222-4333-8444-555555555555"
+      title          = "second"
+      trigger_event  = "EvidenceGapDetected"
+      action_type    = "webhook"
+      url_to_trigger = "https://example.com/validation"
+    },
+  ]
+}`,
+			expectError: regexp.MustCompile(`(?s)Duplicate Step Identifier`),
+		},
+		{
+			name: "playbook schedule timezone must use a current name",
+			config: `
+resource "anecdotes_playbook" "test" {
+  title       = "tf-test-validation-playbook"
+  description = "validation"
+
+  schedule_config = {
+    period     = "day"
+    time       = "09:00"
+    timezone   = "US/Eastern"
+    start_date = "2026-09-07T00:00:00Z"
+  }
+
+  steps = [
+    {
+      title          = "step"
+      trigger_event  = "ScheduledPlaybookTriggered"
+      action_type    = "webhook"
+      url_to_trigger = "https://example.com/validation"
+    },
+  ]
+}`,
+			expectError: regexp.MustCompile(`(?s)Deprecated Timezone Name`),
+		},
+		{
+			name: "playbook schedule start date must be in coordinated universal time",
+			config: `
+resource "anecdotes_playbook" "test" {
+  title       = "tf-test-validation-playbook"
+  description = "validation"
+
+  schedule_config = {
+    period     = "day"
+    time       = "09:00"
+    start_date = "2026-09-07T09:00:00+02:00"
+  }
+
+  steps = [
+    {
+      title          = "step"
+      trigger_event  = "ScheduledPlaybookTriggered"
+      action_type    = "webhook"
+      url_to_trigger = "https://example.com/validation"
+    },
+  ]
+}`,
+			expectError: regexp.MustCompile(`(?s)Timestamp Must Be UTC`),
+		},
+		{
+			name: "playbook schedule requires a scheduled trigger",
+			config: `
+resource "anecdotes_playbook" "test" {
+  title       = "tf-test-validation-playbook"
+  description = "validation"
+
+  schedule_config = {
+    period     = "day"
+    time       = "09:00"
+    start_date = "2026-09-07T00:00:00Z"
+  }
+
+  steps = [
+    {
+      title          = "step"
+      trigger_event  = "ControlStatusChanged"
+      action_type    = "webhook"
+      url_to_trigger = "https://example.com/validation"
+    },
+  ]
+}`,
+			expectError: regexp.MustCompile(`(?s)Schedule Requires a Scheduled Trigger`),
+		},
+		{
 			name: "requirement view requires a parent_id",
 			config: `
 resource "anecdotes_requirement_view" "test" {

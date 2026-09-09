@@ -28,6 +28,7 @@ func TestNoRawAPIClientErrors(t *testing.T) {
 		"Invalid rule_query":                    "json.Unmarshal of user rule_query",
 		"Invalid data JSON":                     "json.Unmarshal of user data attribute",
 		"Invalid filter_aql":                    "json.Unmarshal of user filter_aql",
+		"Invalid Step Configuration":            "json.Marshal of a step configuration map (local)",
 		"File Read Error":                       "os.ReadFile of a local file",
 		"File Error":                            "os.ReadFile of a local file",
 		"Mapping Error":                         "local model->state mapping",
