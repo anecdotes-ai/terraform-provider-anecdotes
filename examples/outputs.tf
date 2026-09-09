@@ -21,3 +21,11 @@ output "framework_name" {
 output "control_id" {
   value = anecdotes_control.anecdotes_control.control_id
 }
+
+output "role_id" {
+  value = anecdotes_role.anecdotes_auditor_readonly.role_id
+}
+
+output "saml_provider_id" {
+  value = anecdotes_saml_configuration.anecdotes_okta_saml.provider_id
+}

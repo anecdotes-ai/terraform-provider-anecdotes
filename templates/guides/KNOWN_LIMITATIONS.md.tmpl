@@ -122,6 +122,39 @@ Requirement categories are the categories Anecdotes defines, the same list the
 Requirements Hub offers. Requirements that do not fit one of them belong under
 `Custom Requirements`.
 
+## SAML configuration display name must be unique
+
+`anecdotes_saml_configuration`'s `provider_id` is derived from `display_name`, so
+two configurations with the same `display_name` collide on the same identifier.
+Creating one fails with a conflict error rather than a generic uniqueness error
+— rename the configuration to resolve it.
+
+## SAML configuration delete is best-effort
+
+The platform has no reliable way to report that a SAML configuration was
+already gone: an unknown `provider_id` and a genuine deletion failure both
+surface the same server error. `terraform destroy` treats that ambiguous
+response as success rather than getting permanently stuck on a configuration
+that was removed outside Terraform. If the delete genuinely failed for another
+reason, the configuration will still show up on the next `terraform plan`.
+
+## Login Methods settings is a singleton, without import
+
+`anecdotes_login_settings` manages the tenant's one login configuration, which
+always exists on the platform — there is nothing to look up by ID, so
+`terraform import` is not supported for this resource. Removing the resource
+block only stops Terraform from managing the settings; it does not reset or
+clear them.
+
+## SCIM API key secret is available only once
+
+`anecdotes_scim_api_key`'s `key` attribute holds the full secret only in the
+response to the create call — every later read from the platform returns just
+the last 8 characters. Store the value somewhere durable when you apply the
+resource; it cannot be retrieved again afterward, including via
+`terraform import` (an imported key's `key` attribute holds only the truncated
+value).
+
 ## Error reporting
 
 When the API rejects a request without structured validation details, the

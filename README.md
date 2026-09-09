@@ -3,7 +3,7 @@
 Manage the [Anecdotes](https://anecdotes.ai) GRC (Governance, Risk & Compliance)
 compliance program as Infrastructure as Code.
 
-**7 resources** | **11 data sources** | Full create, read, update, delete, and import
+**12 resources** | **13 data sources** | Full create, read, update, delete, and import
 
 ---
 
@@ -88,6 +88,9 @@ anecdotes_framework_folder        # Folder that groups frameworks
 - **Requirement** — an operational action that satisfies controls; requirements can be shared across frameworks.
 - **Mappings** — the M:N links between controls and requirements, and between requirements and evidence.
 
+Administration and Settings resources (below) are independent of this hierarchy —
+they configure tenant-level account settings rather than compliance content.
+
 ---
 
 ## Resources
@@ -101,6 +104,10 @@ anecdotes_framework_folder        # Folder that groups frameworks
 | `anecdotes_requirement` | An operational requirement. |
 | `anecdotes_mapping_control_requirement` | Links a control to one or more requirements. |
 | `anecdotes_mapping_requirement_evidence` | Links a requirement to a piece of evidence. |
+| `anecdotes_role` | A tenant-scoped custom RBAC role. |
+| `anecdotes_login_settings` | The tenant's Login Methods settings (singleton). |
+| `anecdotes_saml_configuration` | A SAML 2.0 identity provider configuration. |
+| `anecdotes_scim_api_key` | An API key scoped to SCIM provisioning. |
 
 ## Data Sources
 
@@ -112,6 +119,7 @@ anecdotes_framework_folder        # Folder that groups frameworks
 | `anecdotes_requirement` / `anecdotes_requirements` | Look up one requirement, or list requirements. |
 | `anecdotes_framework_folder` / `anecdotes_framework_folders` | Look up one framework folder, or list them. |
 | `anecdotes_evidences` | List evidence (read-only). |
+| `anecdotes_role` / `anecdotes_roles` | Look up one role, or list roles (built-in and custom). |
 
 Per-attribute documentation is generated for every resource and data source under
 [`docs/`](docs/).

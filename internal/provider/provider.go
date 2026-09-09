@@ -222,6 +222,10 @@ func (p *AnecdotesProvider) Resources(ctx context.Context) []func() resource.Res
 		NewRequirementResource,
 		NewRequirementViewResource,
 		NewMappingRequirementEvidenceResource,
+		NewLoginSettingsResource,
+		NewScimApiKeyResource,
+		NewRoleResource,
+		NewSamlConfigurationResource,
 	}
 }
 
@@ -238,5 +242,7 @@ func (p *AnecdotesProvider) DataSources(ctx context.Context) []func() datasource
 		NewFrameworkFolderDataSource,
 		NewFrameworkFoldersDataSource,
 		NewEvidencesDataSource,
+		NewRoleDataSource,
+		NewRolesDataSource,
 	}
 }

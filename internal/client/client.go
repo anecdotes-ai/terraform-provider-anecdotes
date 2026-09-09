@@ -6,11 +6,14 @@ package client
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -1280,4 +1283,232 @@ func normalizeMaturityLevel(raw string) string {
 		}
 	}
 	return ""
+}
+
+// GetLoginSettings retrieves the tenant's current login configuration.
+func (c *AnecdotesClient) GetLoginSettings(ctx context.Context) (*LoginSettings, error) {
+	respBody, err := c.doRequest(ctx, "GET", "/identity/v1/customer/login_settings", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var settings LoginSettings
+	if err := json.Unmarshal(respBody, &settings); err != nil {
+		return nil, fmt.Errorf("failed to parse login settings response: %w", err)
+	}
+
+	return &settings, nil
+}
+
+// UpdateLoginSettings replaces the tenant's entire login configuration. The API
+// performs a full-object replace, not a patch, so settings must be the complete
+// desired object (typically built from a prior GetLoginSettings with the
+// intended changes applied) — any field left at its zero value will be persisted
+// as such. The update response body is empty, so this re-fetches afterward.
+func (c *AnecdotesClient) UpdateLoginSettings(ctx context.Context, settings *LoginSettings) (*LoginSettings, error) {
+	if _, err := c.doRequest(ctx, "PUT", "/identity/v1/customer/login_settings", settings); err != nil {
+		return nil, err
+	}
+
+	return c.GetLoginSettings(ctx)
+}
+
+// ListScimApiKeys retrieves all SCIM API keys for the tenant. The Key field of
+// each entry is truncated to its last 8 characters; only CreateScimApiKey
+// returns the full secret.
+func (c *AnecdotesClient) ListScimApiKeys(ctx context.Context) ([]ScimApiKey, error) {
+	respBody, err := c.doRequest(ctx, "GET", "/identity/v1/scim/apikey", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var keys []ScimApiKey
+	if err := json.Unmarshal(respBody, &keys); err != nil {
+		return nil, fmt.Errorf("failed to parse SCIM API keys response: %w", err)
+	}
+
+	return keys, nil
+}
+
+// GetScimApiKey finds a SCIM API key by its key_id.
+func (c *AnecdotesClient) GetScimApiKey(ctx context.Context, keyID string) (*ScimApiKey, error) {
+	keys, err := c.ListScimApiKeys(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, k := range keys {
+		if k.KeyID == keyID {
+			return &k, nil
+		}
+	}
+
+	return nil, fmt.Errorf("SCIM API key not found: %s: %w", keyID, ErrNotFound)
+}
+
+// CreateScimApiKey creates a SCIM API key. The response's Key field is the full
+// secret, shown only this once.
+func (c *AnecdotesClient) CreateScimApiKey(ctx context.Context, req *ScimApiKeyCreateRequest) (*ScimApiKey, error) {
+	respBody, err := c.doRequest(ctx, "POST", "/identity/v1/scim/apikey", req)
+	if err != nil {
+		return nil, err
+	}
+
+	var key ScimApiKey
+	if err := json.Unmarshal(respBody, &key); err != nil {
+		return nil, fmt.Errorf("failed to parse SCIM API key response: %w", err)
+	}
+
+	return &key, nil
+}
+
+// DeleteScimApiKey deletes a SCIM API key by its key_id. The API returns 204
+// even for an unknown key_id, so this never surfaces a not-found error.
+func (c *AnecdotesClient) DeleteScimApiKey(ctx context.Context, keyID string) error {
+	path := "/identity/v1/scim/apikey?" + url.Values{"api_key_id": {keyID}}.Encode()
+	_, err := c.doRequest(ctx, "DELETE", path, nil)
+	return err
+}
+
+// ListRoles retrieves every role visible to the tenant: built-in global roles
+// plus tenant-specific custom roles.
+func (c *AnecdotesClient) ListRoles(ctx context.Context) ([]Role, error) {
+	respBody, err := c.doRequest(ctx, "GET", "/identity/v1/roles", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var roles []Role
+	if err := json.Unmarshal(respBody, &roles); err != nil {
+		return nil, fmt.Errorf("failed to parse roles response: %w", err)
+	}
+
+	return roles, nil
+}
+
+// GetRole finds a role by its key.
+func (c *AnecdotesClient) GetRole(ctx context.Context, key string) (*Role, error) {
+	roles, err := c.ListRoles(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, r := range roles {
+		if r.Key == key {
+			return &r, nil
+		}
+	}
+
+	return nil, fmt.Errorf("role not found: %s: %w", key, ErrNotFound)
+}
+
+// CreateRole creates a tenant-scoped custom role. The create response's
+// Permissions/FullAccessFrameworks are not guaranteed to reflect what is
+// actually persisted, so this re-fetches via ListRoles for the canonical values.
+func (c *AnecdotesClient) CreateRole(ctx context.Context, req *RoleCreateRequest) (*Role, error) {
+	respBody, err := c.doRequest(ctx, "POST", "/identity/v1/roles", req)
+	if err != nil {
+		return nil, err
+	}
+
+	var created Role
+	if err := json.Unmarshal(respBody, &created); err != nil {
+		return nil, fmt.Errorf("failed to parse role response: %w", err)
+	}
+
+	return c.GetRole(ctx, created.Key)
+}
+
+// UpdateRole replaces a custom role's writable fields. req must carry the
+// complete desired object (PUT is a full-object replace, not a patch). The
+// update response's Name/Description are not reliable when they were sent
+// unchanged, so this re-fetches via ListRoles for the durable values.
+func (c *AnecdotesClient) UpdateRole(ctx context.Context, req *RoleUpdateRequest) (*Role, error) {
+	if _, err := c.doRequest(ctx, "PUT", "/identity/v1/roles", req); err != nil {
+		return nil, err
+	}
+
+	return c.GetRole(ctx, req.Key)
+}
+
+// DeleteRole deletes a tenant-scoped custom role by its key.
+func (c *AnecdotesClient) DeleteRole(ctx context.Context, key string) error {
+	path := "/identity/v1/roles?" + url.Values{"role_id": {key}}.Encode()
+	_, err := c.doRequest(ctx, "DELETE", path, nil)
+	return err
+}
+
+// ComputeSamlProviderID derives a SAML configuration's provider_id the same
+// way the identity service does: it is not server-random, but a deterministic
+// function of displayName alone. A duplicate display_name therefore collides
+// on the same provider_id, which the API rejects with a 409 (see IsConflict).
+func ComputeSamlProviderID(displayName string) string {
+	sum := sha256.Sum256([]byte(strings.ToLower(displayName)))
+	return "saml.a" + hex.EncodeToString(sum[:])[:10]
+}
+
+// ListSamlConfigurations retrieves every SAML identity provider configured for
+// the tenant.
+func (c *AnecdotesClient) ListSamlConfigurations(ctx context.Context) ([]SamlConfiguration, error) {
+	respBody, err := c.doRequest(ctx, "GET", "/identity/v1/customer/saml", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var configs []SamlConfiguration
+	if err := json.Unmarshal(respBody, &configs); err != nil {
+		return nil, fmt.Errorf("failed to parse SAML configurations response: %w", err)
+	}
+
+	return configs, nil
+}
+
+// GetSamlConfiguration finds a SAML configuration by its provider_id.
+func (c *AnecdotesClient) GetSamlConfiguration(ctx context.Context, providerID string) (*SamlConfiguration, error) {
+	configs, err := c.ListSamlConfigurations(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, cfg := range configs {
+		if cfg.ProviderID == providerID {
+			return &cfg, nil
+		}
+	}
+
+	return nil, fmt.Errorf("SAML configuration not found: %s: %w", providerID, ErrNotFound)
+}
+
+// CreateSamlConfiguration creates a SAML identity provider configuration. The
+// create response body is empty, but provider_id does not need to be guessed —
+// it is computed via ComputeSamlProviderID and then confirmed with one
+// GetSamlConfiguration call (which also picks up the platform-assigned idp_type).
+func (c *AnecdotesClient) CreateSamlConfiguration(ctx context.Context, req *SamlCreateRequest) (*SamlConfiguration, error) {
+	if _, err := c.doRequest(ctx, "POST", "/identity/v1/customer/saml", req); err != nil {
+		return nil, err
+	}
+
+	return c.GetSamlConfiguration(ctx, ComputeSamlProviderID(req.DisplayName))
+}
+
+// UpdateSamlConfiguration replaces an existing SAML configuration, identified
+// by req.ProviderID. The update response body is empty, so this re-fetches
+// afterward for the current state.
+func (c *AnecdotesClient) UpdateSamlConfiguration(ctx context.Context, req *SamlUpdateRequest) (*SamlConfiguration, error) {
+	if _, err := c.doRequest(ctx, "PUT", "/identity/v1/customer/saml", req); err != nil {
+		return nil, err
+	}
+
+	return c.GetSamlConfiguration(ctx, req.ProviderID)
+}
+
+// DeleteSamlConfiguration deletes a SAML configuration by its provider_id. The
+// API has no reliable not-found signal for this endpoint: an unknown provider_id
+// and a genuine upstream failure both surface as a plain-text 502 — callers
+// that want best-effort delete semantics must check for that themselves (e.g.
+// via StatusCode(err) == 502), since this method reports it as an ordinary error.
+func (c *AnecdotesClient) DeleteSamlConfiguration(ctx context.Context, providerID string) error {
+	path := "/identity/v1/customer/saml?" + url.Values{"saml_id": {providerID}}.Encode()
+	_, err := c.doRequest(ctx, "DELETE", path, nil)
+	return err
 }

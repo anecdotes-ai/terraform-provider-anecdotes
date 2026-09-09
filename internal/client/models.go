@@ -527,3 +527,130 @@ type AttachmentFile struct {
 	FileSize    int64  `json:"file_size"`
 	ContentType string `json:"content_type"`
 }
+
+// LoginSettings represents a tenant's login configuration (Administration >
+// Settings > Login Methods). GET/PUT /identity/v1/customer/login_settings both
+// operate on this whole object — PUT is a full-object replace, not a patch.
+type LoginSettings struct {
+	EmailLogin       EmailLoginSettings `json:"email_login"`
+	Idps             IdpSettings        `json:"idps"`
+	SupportTeamLogin bool               `json:"support_team_login"`
+	SeamlessLogin    bool               `json:"seamless_login"`
+}
+
+// EmailLoginSettings controls whether email/password login is permitted, per user type.
+type EmailLoginSettings struct {
+	InternalUsers        bool `json:"internal_users"`
+	Auditors             bool `json:"auditors"`
+	ExternalStakeholders bool `json:"external_stakeholders"`
+}
+
+// IdpSettings controls whether login via each identity provider is enabled.
+type IdpSettings struct {
+	Google    bool `json:"google.com"`
+	Microsoft bool `json:"microsoft.com"`
+}
+
+// ScimApiKey represents an API key scoped to SCIM provisioning
+// (Administration > Settings > SCIM). The full secret (Key) is only ever
+// populated on the Create response; every later List returns just its last 8
+// characters.
+type ScimApiKey struct {
+	ApiKeyName      string   `json:"api_key_name"`
+	ApiKeyRole      string   `json:"api_key_role"`
+	KeyID           string   `json:"key_id"`
+	Key             string   `json:"key"`
+	ExpirationDate  *string  `json:"expiration_date"`
+	CreatedBy       string   `json:"created_by"`
+	CreatedAt       string   `json:"created_at"`
+	LastUsedDate    *string  `json:"last_used_date"`
+	AuditFrameworks []string `json:"audit_frameworks"`
+	Platform        string   `json:"platform"`
+}
+
+// ScimApiKeyCreateRequest is the create-SCIM-API-key body.
+type ScimApiKeyCreateRequest struct {
+	ApiKeyName string `json:"api_key_name"`
+}
+
+// Role represents a role (built-in global or tenant-scoped custom) in the RBAC
+// system (Administration > Roles).
+type Role struct {
+	// Key is server-generated once at creation from Name and never changes
+	// afterward, including on rename.
+	Key         string `json:"key"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	// Permissions is the live, resolved permission set on List/Get. On a Create
+	// or Update response it only echoes the request and is not durable — this
+	// client always re-fetches after a write, so callers only ever see the
+	// resolved value.
+	Permissions []string `json:"permissions"`
+	// Attributes is {"tenant": "<tenant_id>"} for a custom role, or
+	// {"is_global_role": "true"} for a built-in global role.
+	Attributes map[string]string `json:"attributes"`
+	Extends    []string          `json:"extends"`
+	CreatedAt  string            `json:"created_at"`
+	UpdatedAt  string            `json:"updated_at"`
+	// FullAccessFrameworks is nil (JSON null) when unscoped; nil and an empty
+	// list are equivalent and the platform normalizes to nil on every List/Get.
+	FullAccessFrameworks []string `json:"full_access_frameworks"`
+}
+
+// RoleCreateRequest is the create-role body. A client-supplied Key is ignored
+// by the API. Extends defaults server-side to ["basic_role"] when omitted.
+type RoleCreateRequest struct {
+	Name                 string   `json:"name"`
+	Description          string   `json:"description,omitempty"`
+	Extends              []string `json:"extends,omitempty"`
+	Permissions          []string `json:"permissions,omitempty"`
+	FullAccessFrameworks []string `json:"full_access_frameworks,omitempty"`
+}
+
+// RoleUpdateRequest is the update-role body. This is a full-object replace, not
+// a patch — every field is always sent, even when unchanged, since an omitted
+// Name/Description produces an unreliable server-generated fallback.
+type RoleUpdateRequest struct {
+	Key                  string   `json:"key"`
+	Name                 string   `json:"name"`
+	Description          string   `json:"description"`
+	Extends              []string `json:"extends"`
+	Permissions          []string `json:"permissions"`
+	FullAccessFrameworks []string `json:"full_access_frameworks"`
+}
+
+// SamlConfiguration represents a SAML identity provider configuration
+// (Settings > Login Methods > SAML 2.0).
+type SamlConfiguration struct {
+	DisplayName string `json:"display_name"`
+	IdpEntityID string `json:"idp_entity_id"`
+	// ProviderID is server-generated on create, deterministically:
+	// "saml.a" + the first 10 hex characters of sha256(lower(display_name)).
+	// See ComputeSamlProviderID.
+	ProviderID       string   `json:"provider_id"`
+	RpEntityID       string   `json:"rp_entity_id"`
+	SsoURL           string   `json:"sso_url"`
+	X509Certificates []string `json:"x509_certificates"`
+	// IdpType is server-assigned, e.g. "okta", "azuread", or "custom".
+	IdpType string `json:"idp_type"`
+}
+
+// SamlCreateRequest is the create-SAML-configuration body.
+type SamlCreateRequest struct {
+	DisplayName      string   `json:"display_name"`
+	IdpEntityID      string   `json:"idp_entity_id"`
+	RpEntityID       string   `json:"rp_entity_id"`
+	SsoURL           string   `json:"sso_url"`
+	X509Certificates []string `json:"x509_certificates"`
+}
+
+// SamlUpdateRequest is the update-SAML-configuration body — the create fields
+// plus the provider_id identifying which configuration to replace.
+type SamlUpdateRequest struct {
+	ProviderID       string   `json:"provider_id"`
+	DisplayName      string   `json:"display_name"`
+	IdpEntityID      string   `json:"idp_entity_id"`
+	RpEntityID       string   `json:"rp_entity_id"`
+	SsoURL           string   `json:"sso_url"`
+	X509Certificates []string `json:"x509_certificates"`
+}

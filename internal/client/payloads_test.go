@@ -362,6 +362,222 @@ func TestDeleteRequirement_VerifiesTheOutcome(t *testing.T) {
 	}
 }
 
+// Update Login Settings is a full-object replace (no partial patch) — every
+// field, including false-valued booleans, must be present in the request body,
+// or the platform will persist an omitted field as unset rather than preserving it.
+func TestUpdateLoginSettings_SendsCompleteObject(t *testing.T) {
+	settings := &LoginSettings{
+		EmailLogin:       EmailLoginSettings{InternalUsers: true, Auditors: false, ExternalStakeholders: true},
+		Idps:             IdpSettings{Google: true, Microsoft: false},
+		SupportTeamLogin: true,
+		SeamlessLogin:    false,
+	}
+
+	body := captureRequest(t, func(c *AnecdotesClient) error {
+		_, err := c.UpdateLoginSettings(context.Background(), settings)
+		return err
+	})
+
+	var payload map[string]interface{}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		t.Fatalf("unmarshal: %v (body %s)", err, body)
+	}
+
+	emailLogin, ok := payload["email_login"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected email_login object, got %v", payload["email_login"])
+	}
+	if emailLogin["internal_users"] != true || emailLogin["auditors"] != false || emailLogin["external_stakeholders"] != true {
+		t.Errorf("email_login not sent completely: %v", emailLogin)
+	}
+
+	idps, ok := payload["idps"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected idps object, got %v", payload["idps"])
+	}
+	if idps["google.com"] != true || idps["microsoft.com"] != false {
+		t.Errorf("idps not sent completely: %v", idps)
+	}
+
+	if payload["support_team_login"] != true {
+		t.Errorf("support_team_login not sent: %v", payload["support_team_login"])
+	}
+	if _, ok := payload["seamless_login"]; !ok {
+		t.Errorf("seamless_login must be present in the full-replace payload, got %v", payload)
+	}
+}
+
+// Create SCIM API key must send api_key_name — a wrong field name would fail
+// silently (the API ignores unrecognized fields on this endpoint).
+func TestScimApiKeyCreateRequest_SendsApiKeyName(t *testing.T) {
+	encoded, err := json.Marshal(&ScimApiKeyCreateRequest{ApiKeyName: "OKTA"})
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if !strings.Contains(string(encoded), `"api_key_name":"OKTA"`) {
+		t.Errorf("expected api_key_name in payload, got %s", encoded)
+	}
+}
+
+// Delete SCIM API key must send the key_id as a query parameter, not a path
+// segment or body field.
+func TestDeleteScimApiKey_SendsKeyIDAsQueryParam(t *testing.T) {
+	var capturedQuery string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/apikey/exchange") {
+			_, _ = w.Write([]byte("test-token"))
+			return
+		}
+		capturedQuery = r.URL.RawQuery
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	if err := newTestClient(t, srv).DeleteScimApiKey(context.Background(), "abc123"); err != nil {
+		t.Fatalf("DeleteScimApiKey: %v", err)
+	}
+	if capturedQuery != "api_key_id=abc123" {
+		t.Errorf("expected query api_key_id=abc123, got %q", capturedQuery)
+	}
+}
+
+// Update Role is a full-object replace (no partial patch) — every field must
+// be present in the request body, including a nil full_access_frameworks
+// (sent as JSON null, not omitted). Separately, the immediate PUT response's
+// name/description are a documented unreliable fallback when unchanged, so
+// UpdateRole must return the List-confirmed values instead of trusting it.
+func TestUpdateRole_SendsCompleteObjectAndTrustsListForState(t *testing.T) {
+	var capturedPUTBody []byte
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/apikey/exchange"):
+			_, _ = w.Write([]byte("test-token"))
+		case r.Method == http.MethodPut:
+			capturedPUTBody, _ = io.ReadAll(r.Body)
+			_, _ = w.Write([]byte(`{"key":"cst_role","name":"WRONG-FALLBACK","description":"WRONG-FALLBACK"}`))
+		case r.Method == http.MethodGet:
+			_, _ = w.Write([]byte(`[{"key":"cst_role","name":"DemoRole","description":"View some things only, updated","permissions":["control:read"],"extends":["limited_frameworks_role"],"full_access_frameworks":null,"created_at":"t1","updated_at":"t2"}]`))
+		}
+	}))
+	defer srv.Close()
+
+	role, err := newTestClient(t, srv).UpdateRole(context.Background(), &RoleUpdateRequest{
+		Key:                  "cst_role",
+		Name:                 "DemoRole",
+		Description:          "View some things only, updated",
+		Extends:              []string{"limited_frameworks_role"},
+		Permissions:          []string{"control:read"},
+		FullAccessFrameworks: nil,
+	})
+	if err != nil {
+		t.Fatalf("UpdateRole: %v", err)
+	}
+
+	var payload map[string]interface{}
+	if err := json.Unmarshal(capturedPUTBody, &payload); err != nil {
+		t.Fatalf("unmarshal PUT body: %v (body %s)", err, capturedPUTBody)
+	}
+	for _, field := range []string{"key", "name", "description", "extends", "permissions", "full_access_frameworks"} {
+		if _, ok := payload[field]; !ok {
+			t.Errorf("expected %q in the full-replace PUT body, got %v", field, payload)
+		}
+	}
+
+	if role.Name != "DemoRole" || role.Description != "View some things only, updated" {
+		t.Errorf("expected UpdateRole to return the List-confirmed values, got name=%q description=%q", role.Name, role.Description)
+	}
+}
+
+// ComputeSamlProviderID must match the identity service's own derivation
+// exactly (confirmed from that service's source and its own unit test) — any
+// drift here would misresolve Create/Get/Update for every SAML configuration.
+func TestComputeSamlProviderID_MatchesIdentityServiceFormula(t *testing.T) {
+	cases := []struct {
+		displayName string
+		want        string
+	}{
+		// Pinned from the identity service's own test_add_saml_idp.py fixture.
+		{"oktasaml", "saml.ad7abc8242d"},
+		{"ApiDocsTest", "saml.adbbb5917b5"},
+		// Derivation is case-insensitive on display_name.
+		{"OKTASAML", "saml.ad7abc8242d"},
+	}
+	for _, c := range cases {
+		if got := ComputeSamlProviderID(c.displayName); got != c.want {
+			t.Errorf("ComputeSamlProviderID(%q) = %q, want %q", c.displayName, got, c.want)
+		}
+	}
+}
+
+// Create SAML configuration's response body is empty — CreateSamlConfiguration
+// must compute provider_id itself and confirm it with a GET, rather than
+// guessing or failing to resolve the new configuration at all.
+func TestCreateSamlConfiguration_SendsCreateFieldsAndResolvesProviderID(t *testing.T) {
+	var capturedPOSTBody []byte
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/apikey/exchange"):
+			_, _ = w.Write([]byte("test-token"))
+		case r.Method == http.MethodPost:
+			capturedPOSTBody, _ = io.ReadAll(r.Body)
+		case r.Method == http.MethodGet:
+			_, _ = w.Write([]byte(`[{"display_name":"ApiDocsTest","idp_entity_id":"ApiDocsTestIDP","provider_id":"saml.adbbb5917b5","rp_entity_id":"ApiDocsTestSP","sso_url":"https://idp.example.com/sso/saml","x509_certificates":["cert"],"idp_type":"custom"}]`))
+		}
+	}))
+	defer srv.Close()
+
+	cfg, err := newTestClient(t, srv).CreateSamlConfiguration(context.Background(), &SamlCreateRequest{
+		DisplayName:      "ApiDocsTest",
+		IdpEntityID:      "ApiDocsTestIDP",
+		RpEntityID:       "ApiDocsTestSP",
+		SsoURL:           "https://idp.example.com/sso/saml",
+		X509Certificates: []string{"cert"},
+	})
+	if err != nil {
+		t.Fatalf("CreateSamlConfiguration: %v", err)
+	}
+
+	var payload map[string]interface{}
+	if err := json.Unmarshal(capturedPOSTBody, &payload); err != nil {
+		t.Fatalf("unmarshal POST body: %v (body %s)", err, capturedPOSTBody)
+	}
+	for _, field := range []string{"display_name", "idp_entity_id", "rp_entity_id", "sso_url", "x509_certificates"} {
+		if _, ok := payload[field]; !ok {
+			t.Errorf("expected %q in create payload, got %v", field, payload)
+		}
+	}
+
+	if cfg.ProviderID != "saml.adbbb5917b5" {
+		t.Errorf("expected the computed provider_id to resolve the created config, got %q", cfg.ProviderID)
+	}
+	if cfg.IdpType != "custom" {
+		t.Errorf("expected idp_type from the confirming GET, got %q", cfg.IdpType)
+	}
+}
+
+// DELETE /customer/saml returns a plain-text 502 for both an unknown saml_id
+// and a genuine failure — callers that want best-effort delete semantics rely
+// on distinguishing the status code, so this pins that it comes through intact.
+func TestDeleteSamlConfiguration_502IsDistinguishableByStatusCode(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/apikey/exchange") {
+			_, _ = w.Write([]byte("test-token"))
+			return
+		}
+		w.WriteHeader(http.StatusBadGateway)
+		_, _ = w.Write([]byte("error code: 502"))
+	}))
+	defer srv.Close()
+
+	err := newTestClient(t, srv).DeleteSamlConfiguration(context.Background(), "saml.aunknown")
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	if StatusCode(err) != 502 {
+		t.Errorf("expected StatusCode 502, got %d", StatusCode(err))
+	}
+}
+
 func stringPtr(s string) *string { return &s }
 
 func keysOf(m map[string]interface{}) []string {

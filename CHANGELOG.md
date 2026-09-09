@@ -21,6 +21,26 @@ the major version.
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- Resources:
+  - `anecdotes_role` — tenant-scoped custom RBAC role (full create, read, update,
+    delete, and import support).
+  - `anecdotes_login_settings` — the tenant's Login Methods settings (singleton;
+    no import, since there is nothing to identify by ID).
+  - `anecdotes_saml_configuration` — SAML 2.0 identity provider configuration
+    (full create, read, update, delete, and import support).
+  - `anecdotes_scim_api_key` — API key scoped to SCIM provisioning (create,
+    read, delete, and import; no update — there is no update endpoint).
+- Data sources:
+  - `anecdotes_role` and `anecdotes_roles` — look up one role, or list every
+    role visible to the tenant (built-in global roles plus tenant-specific
+    custom roles).
+
+---
+
 ## [1.1.1] - 2026-08-30
 
 ### Changed
