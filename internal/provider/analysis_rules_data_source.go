@@ -5,7 +5,6 @@ package provider
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/anecdotes-ai/terraform-provider-anecdotes/internal/client"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
@@ -164,20 +163,7 @@ removed, and are excluded unless ` + "`include_archived`" + ` is set.
 }
 
 func (d *AnalysisRulesDataSource) Configure(ctx context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
-	if req.ProviderData == nil {
-		return
-	}
-
-	c, ok := req.ProviderData.(*client.AnecdotesClient)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Unexpected Data Source Configure Type",
-			fmt.Sprintf("Expected *client.AnecdotesClient, got: %T. Please report this issue to the provider developers.", req.ProviderData),
-		)
-		return
-	}
-
-	d.client = c
+	d.client = configureClient(req.ProviderData, "Data Source", &resp.Diagnostics)
 }
 
 func (d *AnalysisRulesDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {

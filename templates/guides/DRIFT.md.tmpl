@@ -107,6 +107,18 @@ State now holds the platform value, so the next plan shows the difference
 against your configuration. Copy the value into the configuration to settle it,
 or leave it and let the next apply revert it.
 
+## Playbook step order
+
+The order of a playbook's steps is Terraform-owned: it is the order the
+configuration lists them in. The platform returns the steps of a playbook in an
+order of its own that changes as steps are edited, so the provider restores the
+configured order on read. A step edited in the application therefore shows as a
+change to that step, never as a reordering of the list.
+
+Because step order is restored by `step_id`, chaining a step to another one
+means setting `step_id` explicitly on the step being chained to. Steps left
+without an id are given one when the playbook is created.
+
 ## What drift detection does not cover
 
 Objects created outside Terraform are not adopted: an object that no resource

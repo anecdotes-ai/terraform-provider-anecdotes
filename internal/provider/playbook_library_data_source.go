@@ -1,0 +1,262 @@
+// Copyright (c) Anecdotes AI
+// SPDX-License-Identifier: MPL-2.0
+
+package provider
+
+import (
+	"context"
+	"strings"
+
+	"github.com/anecdotes-ai/terraform-provider-anecdotes/internal/client"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+)
+
+var _ datasource.DataSource = &PlaybookLibraryDataSource{}
+
+func NewPlaybookLibraryDataSource() datasource.DataSource {
+	return &PlaybookLibraryDataSource{}
+}
+
+type PlaybookLibraryDataSource struct {
+	client *client.AnecdotesClient
+}
+
+type PlaybookLibraryDataSourceModel struct {
+	Category      types.String `tfsdk:"category"`
+	AvailableOnly types.Bool   `tfsdk:"available_only"`
+	Events        types.List   `tfsdk:"events"`
+	TotalCount    types.Int64  `tfsdk:"total_count"`
+}
+
+var playbookLibraryEventAttrTypes = map[string]attr.Type{
+	"event_type":             types.StringType,
+	"trigger_key":            types.StringType,
+	"trigger_value":          types.StringType,
+	"event_text":             types.StringType,
+	"category":               types.StringType,
+	"description":            types.StringType,
+	"is_available":           types.BoolType,
+	"supported_actions":      types.ListType{ElemType: types.StringType},
+	"coming_soon_actions":    types.ListType{ElemType: types.StringType},
+	"required_changed_field": types.StringType,
+	"event_fields":           types.ListType{ElemType: types.ObjectType{AttrTypes: playbookEventFieldAttrTypes}},
+}
+
+var playbookEventFieldAttrTypes = map[string]attr.Type{
+	"field_id":      types.StringType,
+	"display_name":  types.StringType,
+	"type":          types.StringType,
+	"is_filterable": types.BoolType,
+	"aql_operator":  types.StringType,
+	"description":   types.StringType,
+	"values":        types.ListType{ElemType: types.StringType},
+}
+
+func (d *PlaybookLibraryDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_playbook_library"
+}
+
+func (d *PlaybookLibraryDataSource) Schema(ctx context.Context, req datasource.SchemaRequest, resp *datasource.SchemaResponse) {
+	resp.Schema = schema.Schema{
+		Description: "Lists the trigger events a playbook step can subscribe to, with optional filtering.",
+		MarkdownDescription: `
+Lists the trigger events a playbook step can subscribe to, so a ` + "`trigger_event`" + ` on
+` + "`anecdotes_playbook`" + ` can be looked up rather than guessed.
+
+Use ` + "`trigger_value`" + ` as the ` + "`trigger_event`" + ` of a step: it is the event's
+` + "`trigger_key`" + ` when the event declares one, and its ` + "`event_type`" + ` otherwise.
+`,
+		Attributes: map[string]schema.Attribute{
+			"category": schema.StringAttribute{
+				Description: "Filter events by category (case-insensitive), for example \"control\" or \"risk\".",
+				Optional:    true,
+			},
+			"available_only": schema.BoolAttribute{
+				Description: "Return only the events available to this account.",
+				Optional:    true,
+			},
+			"total_count": schema.Int64Attribute{
+				Description: "Total number of trigger events matching the filters.",
+				Computed:    true,
+			},
+			"events": schema.ListNestedAttribute{
+				Description: "List of trigger events matching the filters.",
+				Computed:    true,
+				NestedObject: schema.NestedAttributeObject{
+					Attributes: map[string]schema.Attribute{
+						"event_type": schema.StringAttribute{
+							Description: "The platform event that fires the step.",
+							Computed:    true,
+						},
+						"trigger_key": schema.StringAttribute{
+							Description: "The qualified form of the event when it distinguishes a changed field, for example FindingUpdated:severity. Empty when the event does not declare one.",
+							Computed:    true,
+						},
+						"trigger_value": schema.StringAttribute{
+							Description: "The value to use as a step's trigger_event: trigger_key when set, event_type otherwise.",
+							Computed:    true,
+						},
+						"event_text": schema.StringAttribute{
+							Description: "The human-readable name of the event.",
+							Computed:    true,
+						},
+						"category": schema.StringAttribute{
+							Description: "The part of the platform the event belongs to.",
+							Computed:    true,
+						},
+						"description": schema.StringAttribute{
+							Description: "What the event describes.",
+							Computed:    true,
+						},
+						"is_available": schema.BoolAttribute{
+							Description: "Whether the event is available to this account.",
+							Computed:    true,
+						},
+						"supported_actions": schema.ListAttribute{
+							Description: "The action types a step subscribing to this event can perform.",
+							Computed:    true,
+							ElementType: types.StringType,
+						},
+						"coming_soon_actions": schema.ListAttribute{
+							Description: "The action types announced for this event but not yet available.",
+							Computed:    true,
+							ElementType: types.StringType,
+						},
+						"required_changed_field": schema.StringAttribute{
+							Description: "The field whose change the event reports, when it reports one.",
+							Computed:    true,
+						},
+						"event_fields": schema.ListNestedAttribute{
+							Description: "The fields this event carries. A filterable one can be used as the left side of a step's filter_configuration, and any of them can be referenced from a payload as {{ field_id }}.",
+							Computed:    true,
+							NestedObject: schema.NestedAttributeObject{
+								Attributes: map[string]schema.Attribute{
+									"field_id": schema.StringAttribute{
+										Description: "The name to use in a filter or a payload template.",
+										Computed:    true,
+									},
+									"display_name": schema.StringAttribute{
+										Description: "The human-readable name of the field.",
+										Computed:    true,
+									},
+									"type": schema.StringAttribute{
+										Description: "The kind of value the field holds.",
+										Computed:    true,
+									},
+									"is_filterable": schema.BoolAttribute{
+										Description: "Whether a step's filter_configuration can restrict on this field.",
+										Computed:    true,
+									},
+									"aql_operator": schema.StringAttribute{
+										Description: "The operator a filter on this field must use.",
+										Computed:    true,
+									},
+									"description": schema.StringAttribute{
+										Description: "What the field holds.",
+										Computed:    true,
+									},
+									"values": schema.ListAttribute{
+										Description: "The values the field accepts, when it is a closed set.",
+										Computed:    true,
+										ElementType: types.StringType,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func (d *PlaybookLibraryDataSource) Configure(ctx context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
+	d.client = configureClient(req.ProviderData, "Data Source", &resp.Diagnostics)
+}
+
+func (d *PlaybookLibraryDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
+	var data PlaybookLibraryDataSourceModel
+
+	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	events, err := d.client.ListPlaybookLibrary(ctx)
+	if err != nil {
+		addClientError(&resp.Diagnostics, "read playbook library", err)
+		return
+	}
+
+	filtered := make([]client.PlaybookLibraryEvent, 0, len(events))
+	for _, e := range events {
+		if !data.Category.IsNull() && !data.Category.IsUnknown() {
+			if !strings.EqualFold(e.Category, data.Category.ValueString()) {
+				continue
+			}
+		}
+		if data.AvailableOnly.ValueBool() && !e.IsAvailable {
+			continue
+		}
+		filtered = append(filtered, e)
+	}
+
+	items := make([]attr.Value, len(filtered))
+	for i, e := range filtered {
+		supported, diags := types.ListValueFrom(ctx, types.StringType, e.SupportedActions)
+		resp.Diagnostics.Append(diags...)
+		comingSoon, diags := types.ListValueFrom(ctx, types.StringType, e.ComingSoonActions)
+		resp.Diagnostics.Append(diags...)
+
+		triggerValue := e.TriggerKey
+		if triggerValue == "" {
+			triggerValue = e.EventType
+		}
+
+		fields := make([]attr.Value, len(e.EventFields))
+		for j, f := range e.EventFields {
+			values, d := types.ListValueFrom(ctx, types.StringType, f.Values)
+			resp.Diagnostics.Append(d...)
+			fieldObj, d := types.ObjectValue(playbookEventFieldAttrTypes, map[string]attr.Value{
+				"field_id":      types.StringValue(f.FieldID),
+				"display_name":  types.StringValue(f.DisplayName),
+				"type":          types.StringValue(f.Type),
+				"is_filterable": types.BoolValue(f.IsFilterable),
+				"aql_operator":  types.StringValue(f.AQLOperator),
+				"description":   types.StringValue(f.FieldDescription),
+				"values":        values,
+			})
+			resp.Diagnostics.Append(d...)
+			fields[j] = fieldObj
+		}
+		eventFields, d := types.ListValue(types.ObjectType{AttrTypes: playbookEventFieldAttrTypes}, fields)
+		resp.Diagnostics.Append(d...)
+
+		obj, diags := types.ObjectValue(playbookLibraryEventAttrTypes, map[string]attr.Value{
+			"event_type":             types.StringValue(e.EventType),
+			"trigger_key":            types.StringValue(e.TriggerKey),
+			"trigger_value":          types.StringValue(triggerValue),
+			"event_text":             types.StringValue(e.EventText),
+			"category":               types.StringValue(e.Category),
+			"description":            types.StringValue(e.Description),
+			"is_available":           types.BoolValue(e.IsAvailable),
+			"supported_actions":      supported,
+			"coming_soon_actions":    comingSoon,
+			"required_changed_field": types.StringValue(e.RequiredChangedField),
+			"event_fields":           eventFields,
+		})
+		resp.Diagnostics.Append(diags...)
+		items[i] = obj
+	}
+
+	list, diags := types.ListValue(types.ObjectType{AttrTypes: playbookLibraryEventAttrTypes}, items)
+	resp.Diagnostics.Append(diags...)
+
+	data.Events = list
+	data.TotalCount = types.Int64Value(int64(len(filtered)))
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+}

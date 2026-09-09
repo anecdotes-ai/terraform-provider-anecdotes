@@ -1423,3 +1423,114 @@ func (c *AnecdotesClient) DeleteAnalysisRule(ctx context.Context, ruleID string)
 	_, err := c.doRequest(ctx, "DELETE", analysisRulesPath+"/"+ruleID, nil)
 	return err
 }
+
+// ListPlaybooks retrieves all playbooks with their steps.
+func (c *AnecdotesClient) ListPlaybooks(ctx context.Context) ([]Playbook, error) {
+	respBody, err := c.doRequest(ctx, "GET", "/webhooks/v1/playbook?include_steps=true", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var playbooks []Playbook
+	if err := json.Unmarshal(respBody, &playbooks); err != nil {
+		return nil, fmt.Errorf("failed to parse playbooks response: %w", err)
+	}
+
+	return playbooks, nil
+}
+
+// GetPlaybook retrieves a single playbook, with its steps, by ID.
+func (c *AnecdotesClient) GetPlaybook(ctx context.Context, playbookID string) (*Playbook, error) {
+	playbooks, err := c.ListPlaybooks(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	for i := range playbooks {
+		if playbooks[i].PlaybookID == playbookID {
+			return &playbooks[i], nil
+		}
+	}
+
+	return nil, fmt.Errorf("playbook not found: %s: %w", playbookID, ErrNotFound)
+}
+
+// CreatePlaybook creates a playbook together with its steps and returns it as
+// stored by the platform.
+func (c *AnecdotesClient) CreatePlaybook(ctx context.Context, playbook *PlaybookCreateRequest) (*Playbook, error) {
+	respBody, err := c.doRequest(ctx, "POST", "/webhooks/v1/playbook", playbook)
+	if err != nil {
+		return nil, err
+	}
+
+	var created Playbook
+	if err := json.Unmarshal(respBody, &created); err != nil {
+		return nil, fmt.Errorf("failed to parse playbook response: %w", err)
+	}
+	if created.PlaybookID == "" {
+		return nil, fmt.Errorf("create playbook: the response did not include a playbook id")
+	}
+
+	// The playbook exists at this point. If reading it back fails, the created
+	// playbook is reported so the caller can still record it.
+	stored, err := c.GetPlaybook(ctx, created.PlaybookID)
+	if err != nil {
+		return &created, nil
+	}
+
+	return stored, nil
+}
+
+// UpdatePlaybook updates a playbook and returns it as stored by the platform.
+// Steps carried in the request must already exist on the playbook.
+func (c *AnecdotesClient) UpdatePlaybook(ctx context.Context, playbookID string, playbook *PlaybookUpdateRequest) (*Playbook, error) {
+	if _, err := c.doRequest(ctx, "PATCH", "/webhooks/v1/playbook/"+playbookID, playbook); err != nil {
+		return nil, err
+	}
+
+	// The update has been applied at this point. If reading it back fails, the
+	// caller is told so rather than being left to treat an applied change as a
+	// failed one.
+	stored, err := c.GetPlaybook(ctx, playbookID)
+	if err != nil {
+		return nil, fmt.Errorf("the playbook was updated but could not be read back: %w", err)
+	}
+
+	return stored, nil
+}
+
+// DeletePlaybook deletes a playbook and its steps.
+func (c *AnecdotesClient) DeletePlaybook(ctx context.Context, playbookID string) error {
+	_, err := c.doRequest(ctx, "DELETE", "/webhooks/v1/playbook/"+playbookID, nil)
+	return err
+}
+
+// ListPlaybookLibrary retrieves the trigger events available to playbook steps.
+func (c *AnecdotesClient) ListPlaybookLibrary(ctx context.Context) ([]PlaybookLibraryEvent, error) {
+	respBody, err := c.doRequest(ctx, "GET", "/webhooks/v1/playbook/playbook-library", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var events []PlaybookLibraryEvent
+	if err := json.Unmarshal(respBody, &events); err != nil {
+		return nil, fmt.Errorf("failed to parse playbook library response: %w", err)
+	}
+
+	return events, nil
+}
+
+// ListPlaybookActionLibrary retrieves the actions available to playbook steps.
+func (c *AnecdotesClient) ListPlaybookActionLibrary(ctx context.Context) ([]PlaybookLibraryAction, error) {
+	respBody, err := c.doRequest(ctx, "GET", "/webhooks/v1/playbook/actions-library", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var actions []PlaybookLibraryAction
+	if err := json.Unmarshal(respBody, &actions); err != nil {
+		return nil, fmt.Errorf("failed to parse playbook actions library response: %w", err)
+	}
+
+	return actions, nil
+}

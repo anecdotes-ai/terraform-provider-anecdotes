@@ -368,20 +368,7 @@ func (r *AnalysisRuleResource) ValidateConfig(ctx context.Context, req resource.
 }
 
 func (r *AnalysisRuleResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
-	if req.ProviderData == nil {
-		return
-	}
-
-	c, ok := req.ProviderData.(*client.AnecdotesClient)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *client.AnecdotesClient, got: %T. Please report this issue to the provider developers.", req.ProviderData),
-		)
-		return
-	}
-
-	r.client = c
+	r.client = configureClient(req.ProviderData, "Resource", &resp.Diagnostics)
 }
 
 // applyAnalysisRule maps the platform's view of a rule onto the resource model.

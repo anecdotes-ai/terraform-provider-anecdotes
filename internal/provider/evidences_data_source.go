@@ -5,7 +5,6 @@ package provider
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	"github.com/anecdotes-ai/terraform-provider-anecdotes/internal/client"
@@ -193,20 +192,7 @@ Lists all evidences in the Anecdotes account, with optional filtering by service
 }
 
 func (d *EvidencesDataSource) Configure(ctx context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
-	if req.ProviderData == nil {
-		return
-	}
-
-	c, ok := req.ProviderData.(*client.AnecdotesClient)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Unexpected Data Source Configure Type",
-			fmt.Sprintf("Expected *client.AnecdotesClient, got: %T.", req.ProviderData),
-		)
-		return
-	}
-
-	d.client = c
+	d.client = configureClient(req.ProviderData, "Data Source", &resp.Diagnostics)
 }
 
 func (d *EvidencesDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {

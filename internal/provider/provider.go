@@ -71,6 +71,10 @@ anecdotes_framework          # Framework container (SOC2, ISO 27001, etc.)
                                     └── evidence  # Collected data (anecdotes_evidences data source)
                                             │
                                             └── anecdotes_analysis_rule  # Rules evaluated against an evidence (1:N)
+
+anecdotes_playbook           # Event- or schedule-driven automation
+    │
+    └── step                 # One or more steps, nested in the playbook (1:N)
 ` + "```" + `
 
 ## Key Concepts
@@ -82,6 +86,7 @@ anecdotes_framework          # Framework container (SOC2, ISO 27001, etc.)
 - **Control-Requirement Link**: The M:N relationship enabling cross-mapping
 - **Evidence**: Data collected from a connected service, read through the ` + "`anecdotes_evidences`" + ` data source
 - **Analysis Rule**: A query evaluated against one evidence's collected data, raising a gap or a warning on the rows it matches. Rules the account authors are managed with ` + "`anecdotes_analysis_rule`" + `; the rules shipped with the platform are read-only
+- **Playbook**: An automation that runs one or more steps when a platform event fires or on a schedule
 
 ## Authentication
 
@@ -231,6 +236,7 @@ func (p *AnecdotesProvider) Resources(ctx context.Context) []func() resource.Res
 		NewRequirementViewResource,
 		NewMappingRequirementEvidenceResource,
 		NewAnalysisRuleResource,
+		NewPlaybookResource,
 	}
 }
 
@@ -249,5 +255,7 @@ func (p *AnecdotesProvider) DataSources(ctx context.Context) []func() datasource
 		NewEvidencesDataSource,
 		NewAnalysisRuleDataSource,
 		NewAnalysisRulesDataSource,
+		NewPlaybookLibraryDataSource,
+		NewPlaybookActionLibraryDataSource,
 	}
 }
