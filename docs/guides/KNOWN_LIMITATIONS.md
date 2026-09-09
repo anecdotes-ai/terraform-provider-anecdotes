@@ -165,6 +165,25 @@ A field referenced from a filter or a payload template must also be one the
 event carries: `event_fields` lists them, along with which are filterable and
 the operator a filter on each must use.
 
+## An unrecognised playbook trigger is reported on apply, not on plan
+
+`action_type` is checked while planning, because the set of actions the platform
+defines is fixed. `trigger_event` is not: which events exist, and which are
+available, differs between accounts, so a list held in the provider would reject
+values that are valid elsewhere and accept values that are unavailable here.
+
+A misspelled event name therefore passes `terraform plan` and fails `terraform
+apply`, naming the attribute and the reason:
+
+```
+Error: Invalid Configuration
+  Unable to create playbook: steps.0.step_trigger_event: Invalid event trigger id
+```
+
+Nothing is created when this happens. Read the value from
+`anecdotes_playbook_library` rather than writing it by hand to avoid the round
+trip.
+
 ## Some playbook actions are not yet available
 
 `action_type` accepts every action the platform defines, including ones it has
