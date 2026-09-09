@@ -68,8 +68,12 @@ data "anecdotes_analysis_rules" "with_archived" {
 					testCheckAllAttrEquals("data.anecdotes_analysis_rules.library", "rules", "rule_origin", "library"),
 					testCheckAllAttrEquals("data.anecdotes_analysis_rules.active", "rules", "rule_state", "active"),
 					// Deleting archives rather than removes, so including archived
-					// rules can only widen the result.
+					// rules widens the result. Asserting only that it does not
+					// shrink would pass even if the flag were ignored, so this
+					// also finds an archived rule among the rows it returned.
 					testCheckCountStrictlyLess("data.anecdotes_analysis_rules.all", "data.anecdotes_analysis_rules.with_archived", false),
+					testCheckSomeRowHasAttr("data.anecdotes_analysis_rules.with_archived", "rules", "rule_is_archived", "true"),
+					testCheckNoRowHasAttr("data.anecdotes_analysis_rules.all", "rules", "rule_is_archived", "true"),
 				),
 			},
 		},
@@ -157,4 +161,47 @@ func intAttr(s *terraform.State, resourceAddr, attr string) (int, error) {
 		return 0, fmt.Errorf("reading %s on %s: %w", attr, resourceAddr, err)
 	}
 	return v, nil
+}
+
+// testCheckSomeRowHasAttr asserts at least one element of a list attribute holds
+// want, which is how an inclusive filter proves it admitted something.
+func testCheckSomeRowHasAttr(resourceAddr, listAttr, field, want string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		rs, ok := s.RootModule().Resources[resourceAddr]
+		if !ok {
+			return fmt.Errorf("resource %s not found in state", resourceAddr)
+		}
+		count, err := strconv.Atoi(rs.Primary.Attributes[listAttr+".#"])
+		if err != nil {
+			return fmt.Errorf("reading %s.# on %s: %w", listAttr, resourceAddr, err)
+		}
+		for i := 0; i < count; i++ {
+			if rs.Primary.Attributes[fmt.Sprintf("%s.%d.%s", listAttr, i, field)] == want {
+				return nil
+			}
+		}
+		return fmt.Errorf("no row on %s has %s = %q, so the filter admitted nothing", resourceAddr, field, want)
+	}
+}
+
+// testCheckNoRowHasAttr asserts no element of a list attribute holds want, which
+// is how the same filter proves it excluded something.
+func testCheckNoRowHasAttr(resourceAddr, listAttr, field, want string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		rs, ok := s.RootModule().Resources[resourceAddr]
+		if !ok {
+			return fmt.Errorf("resource %s not found in state", resourceAddr)
+		}
+		count, err := strconv.Atoi(rs.Primary.Attributes[listAttr+".#"])
+		if err != nil {
+			return fmt.Errorf("reading %s.# on %s: %w", listAttr, resourceAddr, err)
+		}
+		for i := 0; i < count; i++ {
+			key := fmt.Sprintf("%s.%d.%s", listAttr, i, field)
+			if rs.Primary.Attributes[key] == want {
+				return fmt.Errorf("%s on %s = %q, but the filter should have excluded it", key, resourceAddr, want)
+			}
+		}
+		return nil
+	}
 }
