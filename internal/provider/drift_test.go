@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -700,6 +701,107 @@ resource "anecdotes_requirement_view" "test" {
 			{
 				Config:   removed,
 				PlanOnly: true,
+			},
+		},
+	})
+}
+
+// TestAccDrift_AnalysisRuleQueryRevert: a rule query edited outside Terraform
+// must surface as drift and be written back on apply. This is what makes
+// rule_query Terraform-owned rather than merely write-once.
+func TestAccDrift_AnalysisRuleQueryRevert(t *testing.T) {
+	name := randomName("rule-drift-query")
+	config := testAccAnalysisRuleConfig(name, testAQLQuery, "")
+
+	var ruleID, evidenceID string
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccEvidencePreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: config,
+				Check: func(s *terraform.State) error {
+					var err error
+					if ruleID, err = stateAttr(s, "anecdotes_analysis_rule.test", "rule_id"); err != nil {
+						return err
+					}
+					evidenceID, err = stateAttr(s, "anecdotes_analysis_rule.test", "evidence_id")
+					return err
+				},
+			},
+			{
+				PreConfig: func() {
+					c := testAccNewClient(t)
+					_, err := c.UpdateAnalysisRule(context.Background(), ruleID, client.AnalysisRuleUpdateRequest{
+						RuleName:      name,
+						RuleQueryType: "aql",
+						RuleQuery:     []byte(`{"left":"Policy Owner","operator":"IsIn","right":["changed-outside-terraform"]}`),
+					})
+					if err != nil {
+						t.Fatalf("out-of-band rule query change failed: %v", err)
+					}
+				},
+				Config: config,
+				Check: func(s *terraform.State) error {
+					rule, err := testAccNewClient(t).GetAnalysisRule(context.Background(), evidenceID, ruleID)
+					if err != nil {
+						return err
+					}
+					if strings.Contains(rule.RuleQueryStr, "changed-outside-terraform") {
+						return fmt.Errorf("the out-of-band query survived apply: %s", rule.RuleQueryStr)
+					}
+					return nil
+				},
+			},
+		},
+	})
+}
+
+// TestAccDrift_AnalysisRuleStateRevert: deactivating a rule in the application
+// must be reverted, since rule_state is Terraform-owned even though the
+// platform applies it through a separate endpoint.
+func TestAccDrift_AnalysisRuleStateRevert(t *testing.T) {
+	name := randomName("rule-drift-state")
+	config := testAccAnalysisRuleConfig(name, testAQLQuery, `  rule_state = "active"`)
+
+	var ruleID, evidenceID string
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccEvidencePreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: config,
+				Check: func(s *terraform.State) error {
+					var err error
+					if ruleID, err = stateAttr(s, "anecdotes_analysis_rule.test", "rule_id"); err != nil {
+						return err
+					}
+					evidenceID, err = stateAttr(s, "anecdotes_analysis_rule.test", "evidence_id")
+					return err
+				},
+			},
+			{
+				PreConfig: func() {
+					if err := testAccNewClient(t).SetAnalysisRuleState(context.Background(), ruleID, "inactive"); err != nil {
+						t.Fatalf("out-of-band state change failed: %v", err)
+					}
+				},
+				Config: config,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("anecdotes_analysis_rule.test", "rule_state", "active"),
+					func(s *terraform.State) error {
+						rule, err := testAccNewClient(t).GetAnalysisRule(context.Background(), evidenceID, ruleID)
+						if err != nil {
+							return err
+						}
+						if rule.RuleState != "active" {
+							return fmt.Errorf("platform rule_state = %q after apply, want active", rule.RuleState)
+						}
+						return nil
+					},
+				),
 			},
 		},
 	})

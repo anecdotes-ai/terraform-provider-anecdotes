@@ -12,6 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
@@ -49,6 +50,7 @@ var evidenceItemAttrTypes = map[string]attr.Type{
 	"evidence_type":        types.StringType,
 	"service_id":           types.StringType,
 	"service_display_name": types.StringType,
+	"service_instance_ids": types.ListType{ElemType: types.StringType},
 	"is_applicable":        types.BoolType,
 	"is_custom":            types.BoolType,
 	"alert_level":          types.Int64Type,
@@ -112,6 +114,11 @@ Lists all evidences in the Anecdotes account, with optional filtering by service
 						"evidence_instance_id": schema.StringAttribute{
 							Description: "The instance identifier of the evidence.",
 							Computed:    true,
+						},
+						"service_instance_ids": schema.ListAttribute{
+							Description: "IDs of the service instances that collected this evidence, the instance it originated from first. These are the values an analysis rule's `account_scoping_list` is expressed in, though a rule additionally requires the instance to still be installed.",
+							Computed:    true,
+							ElementType: types.StringType,
 						},
 						"name": schema.StringAttribute{
 							Description: "The internal name of the evidence.",
@@ -274,6 +281,7 @@ func (d *EvidencesDataSource) Read(ctx context.Context, req datasource.ReadReque
 		obj, diags := types.ObjectValue(evidenceItemAttrTypes, map[string]attr.Value{
 			"evidence_id":          types.StringValue(e.EvidenceID),
 			"evidence_instance_id": types.StringValue(e.EvidenceInstanceID),
+			"service_instance_ids": serviceInstanceIDs(ctx, &resp.Diagnostics, e),
 			"name":                 types.StringValue(e.EvidenceName),
 			"display_name":         types.StringValue(displayName),
 			"evidence_type":        types.StringValue(e.EvidenceType),
@@ -303,4 +311,28 @@ func (d *EvidencesDataSource) Read(ctx context.Context, req datasource.ReadReque
 	data.TotalCount = types.Int64Value(int64(len(filtered)))
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+}
+
+// serviceInstanceIDs collects the service instances that produced an evidence.
+// An evidence reports the instance it originated from separately from any
+// additional instances that collected it; both are merged here, the originating
+// instance first, with duplicates dropped and empty values skipped.
+func serviceInstanceIDs(ctx context.Context, diags *diag.Diagnostics, e client.Evidence) types.List {
+	ids := make([]string, 0, len(e.EvidenceAlsoCollectedByInstances)+1)
+	seen := make(map[string]struct{})
+
+	for _, id := range append([]string{e.EvidenceOriginatedByInstanceID}, e.EvidenceAlsoCollectedByInstances...) {
+		if id == "" {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		ids = append(ids, id)
+	}
+
+	list, d := types.ListValueFrom(ctx, types.StringType, ids)
+	diags.Append(d...)
+	return list
 }

@@ -1282,6 +1282,148 @@ func normalizeMaturityLevel(raw string) string {
 	return ""
 }
 
+// analysisRulesPath is the collection endpoint for the analysis-rules service.
+const analysisRulesPath = "/analysis-rules/v1/analysis-rules"
+
+// ListAnalysisRules returns every analysis rule in the account. The response
+// merges the platform's rule library with the account's own rules, so it is
+// substantially larger than the set a caller usually wants; prefer
+// ListAnalysisRulesByEvidence when the evidence is known.
+func (c *AnecdotesClient) ListAnalysisRules(ctx context.Context) ([]AnalysisRule, error) {
+	respBody, err := c.doRequest(ctx, "GET", analysisRulesPath, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var rules []AnalysisRule
+	if err := json.Unmarshal(respBody, &rules); err != nil {
+		return nil, fmt.Errorf("failed to parse analysis rules list response: %w", err)
+	}
+
+	return rules, nil
+}
+
+// ListAnalysisRulesByEvidence returns the analysis rules attached to one
+// evidence.
+//
+// When evidenceID names an evidence view, the platform resolves it to the
+// view's parent evidence and returns only the rules within the view's scope. A
+// rule created against a view is stored under the view's own id and is
+// therefore not guaranteed to appear here, which is why GetAnalysisRule falls
+// back to a full scan.
+func (c *AnecdotesClient) ListAnalysisRulesByEvidence(ctx context.Context, evidenceID string) ([]AnalysisRule, error) {
+	respBody, err := c.doRequest(ctx, "GET", analysisRulesPath+"/"+evidenceID, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var rules []AnalysisRule
+	if err := json.Unmarshal(respBody, &rules); err != nil {
+		return nil, fmt.Errorf("failed to parse analysis rules response for evidence %s: %w", evidenceID, err)
+	}
+
+	return rules, nil
+}
+
+// GetAnalysisRule returns a single analysis rule by id. It reads the rules for
+// evidenceID first and falls back to a scan of every rule when the rule is not
+// among them, which also covers a rule whose evidence is not yet known.
+// evidenceID may be empty, in which case only the scan runs.
+//
+// An archived rule is reported as not found, so a deleted rule does not linger
+// in Terraform state.
+func (c *AnecdotesClient) GetAnalysisRule(ctx context.Context, evidenceID, ruleID string) (*AnalysisRule, error) {
+	if evidenceID != "" {
+		rules, err := c.ListAnalysisRulesByEvidence(ctx, evidenceID)
+		// A not-found answer here is not terminal: the scan below can still
+		// locate the rule.
+		if err == nil {
+			if rule := findLiveAnalysisRule(rules, ruleID); rule != nil {
+				return rule, nil
+			}
+		} else if !IsNotFound(err) {
+			return nil, err
+		}
+	}
+
+	rules, err := c.ListAnalysisRules(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if rule := findLiveAnalysisRule(rules, ruleID); rule != nil {
+		return rule, nil
+	}
+
+	return nil, fmt.Errorf("analysis rule not found: %s: %w", ruleID, ErrNotFound)
+}
+
+// findLiveAnalysisRule returns the rule with the given id, treating an archived
+// rule as absent.
+func findLiveAnalysisRule(rules []AnalysisRule, ruleID string) *AnalysisRule {
+	for i := range rules {
+		if rules[i].RuleID == ruleID && !rules[i].RuleIsArchived {
+			return &rules[i]
+		}
+	}
+	return nil
+}
+
+// CreateAnalysisRule creates a custom analysis rule. The platform assigns the
+// rule id, and the new rule is recorded as custom and active.
+func (c *AnecdotesClient) CreateAnalysisRule(ctx context.Context, rule AnalysisRuleCreateRequest) (*AnalysisRule, error) {
+	respBody, err := c.doRequest(ctx, "POST", analysisRulesPath, rule)
+	if err != nil {
+		return nil, err
+	}
+
+	var created AnalysisRule
+	if err := json.Unmarshal(respBody, &created); err != nil {
+		return nil, fmt.Errorf("failed to parse analysis rule create response: %w", err)
+	}
+
+	return &created, nil
+}
+
+// UpdateAnalysisRule updates a custom analysis rule.
+//
+// The request must carry the rule's full query: the stored query is replaced by
+// this field on every call, so a request without one would clear it. The guard
+// below rejects that before the request leaves the client.
+func (c *AnecdotesClient) UpdateAnalysisRule(ctx context.Context, ruleID string, rule AnalysisRuleUpdateRequest) (*AnalysisRule, error) {
+	if len(rule.RuleQuery) == 0 {
+		return nil, fmt.Errorf("refusing to update analysis rule %s without a rule query", ruleID)
+	}
+	if rule.RuleQueryType == "" {
+		return nil, fmt.Errorf("refusing to update analysis rule %s without a rule query type", ruleID)
+	}
+
+	respBody, err := c.doRequest(ctx, "PATCH", analysisRulesPath+"/"+ruleID, rule)
+	if err != nil {
+		return nil, err
+	}
+
+	var updated AnalysisRule
+	if err := json.Unmarshal(respBody, &updated); err != nil {
+		return nil, fmt.Errorf("failed to parse analysis rule update response: %w", err)
+	}
+
+	return &updated, nil
+}
+
+// SetAnalysisRuleState activates or deactivates an analysis rule. The response
+// body is not parsed; callers confirm the change by reading the rule back.
+func (c *AnecdotesClient) SetAnalysisRuleState(ctx context.Context, ruleID, state string) error {
+	_, err := c.doRequest(ctx, "PATCH", analysisRulesPath+"/"+ruleID+"/state/"+state, nil)
+	return err
+}
+
+// DeleteAnalysisRule deletes a custom analysis rule. The rule is archived
+// rather than removed, so reads keep returning it with RuleIsArchived set.
+func (c *AnecdotesClient) DeleteAnalysisRule(ctx context.Context, ruleID string) error {
+	_, err := c.doRequest(ctx, "DELETE", analysisRulesPath+"/"+ruleID, nil)
+	return err
+}
+
 // ListPlaybooks retrieves all playbooks with their steps.
 func (c *AnecdotesClient) ListPlaybooks(ctx context.Context) ([]Playbook, error) {
 	respBody, err := c.doRequest(ctx, "GET", "/webhooks/v1/playbook?include_steps=true", nil)

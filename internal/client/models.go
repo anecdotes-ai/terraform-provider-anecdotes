@@ -478,6 +478,11 @@ type Evidence struct {
 	EvidenceServiceID          string `json:"evidence_service_id"`
 	EvidenceServiceDisplayName string `json:"evidence_service_display_name"`
 
+	// Service instances that collected this evidence. Analysis rule account
+	// scoping is expressed in these IDs.
+	EvidenceOriginatedByInstanceID   string   `json:"evidence_originated_by_instance_id"`
+	EvidenceAlsoCollectedByInstances []string `json:"evidence_also_collected_by_instances"`
+
 	// Flags
 	EvidenceIsApplicable bool `json:"evidence_is_applicable"`
 	EvidenceIsCustom     bool `json:"evidence_is_custom"`
@@ -527,6 +532,80 @@ type AttachmentFile struct {
 	Filename    string `json:"filename"`
 	FileSize    int64  `json:"file_size"`
 	ContentType string `json:"content_type"`
+}
+
+// AnalysisRule represents a single analysis rule from the analysis-rules
+// service. A rule is scoped to exactly one evidence and is either shipped with
+// the platform (RuleOrigin "library") or authored by the account
+// (RuleOrigin "custom"). Only custom rules can be updated or deleted.
+//
+// RuleQueryStr holds the query the platform stored, serialized as a JSON
+// string. It is the read-side counterpart of the RuleQuery object sent on
+// create and update: the same content, re-serialized by the platform.
+type AnalysisRule struct {
+	RuleID     string `json:"rule_id"`
+	EvidenceID string `json:"evidence_id"`
+
+	// Query
+	RuleQueryType    string `json:"rule_query_type"`
+	RuleQueryStr     string `json:"rule_query_str"`
+	RuleQueryMessage string `json:"rule_query_message"`
+
+	// Presentation
+	RuleName    string `json:"rule_name"`
+	RuleMessage string `json:"rule_message"`
+	AlertLevel  int64  `json:"alert_level"`
+
+	// Classification
+	RuleOrigin    string `json:"rule_origin"`
+	RuleState     string `json:"rule_state"`
+	RuleType      string `json:"rule_type"`
+	LibraryRuleID string `json:"library_rule_id"`
+
+	// Account scoping
+	AccountScopingType string   `json:"account_scoping_type"`
+	AccountScopingList []string `json:"account_scoping_list"`
+
+	// Platform-maintained
+	LastUpdated    string `json:"last_updated"`
+	LastUpdatedBy  string `json:"last_updated_by"`
+	RuleIsArchived bool   `json:"rule_is_archived"`
+}
+
+// AnalysisRuleCreateRequest represents the request body for creating a custom
+// analysis rule. RuleQuery is a raw JSON object whose shape depends on
+// RuleQueryType, so it is passed through verbatim rather than modeled.
+type AnalysisRuleCreateRequest struct {
+	EvidenceID         string          `json:"evidence_id"`
+	RuleName           string          `json:"rule_name,omitempty"`
+	RuleMessage        string          `json:"rule_message,omitempty"`
+	AlertLevel         int64           `json:"alert_level,omitempty"`
+	RuleQueryType      string          `json:"rule_query_type,omitempty"`
+	RuleQuery          json.RawMessage `json:"rule_query,omitempty"`
+	RuleType           string          `json:"rule_type,omitempty"`
+	LibraryRuleID      string          `json:"library_rule_id,omitempty"`
+	AccountScopingType string          `json:"account_scoping_type,omitempty"`
+	AccountScopingList []string        `json:"account_scoping_list,omitempty"`
+}
+
+// AnalysisRuleUpdateRequest represents the request body for updating a custom
+// analysis rule. EvidenceID, RuleType and LibraryRuleID are not present: they
+// are fixed for the life of a rule, so the provider replaces the rule when they
+// change.
+//
+// RuleQuery and RuleQueryType carry no omitempty and must always be populated.
+// The stored query is replaced by RuleQuery on every call, and RuleQueryType
+// selects the language it is read as, so omitting either rewrites the rule's
+// query or rejects it outright. UpdateAnalysisRule rejects an empty value for
+// both.
+type AnalysisRuleUpdateRequest struct {
+	RuleName           string          `json:"rule_name,omitempty"`
+	RuleMessage        string          `json:"rule_message,omitempty"`
+	AlertLevel         int64           `json:"alert_level,omitempty"`
+	RuleQueryType      string          `json:"rule_query_type"`
+	RuleQuery          json.RawMessage `json:"rule_query"`
+	AccountScopingType string          `json:"account_scoping_type,omitempty"`
+	AccountScopingList []string        `json:"account_scoping_list,omitempty"`
 }
 
 // Playbook represents an automation playbook and its steps.

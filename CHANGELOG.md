@@ -25,6 +25,18 @@ the major version.
 
 ### Added
 
+- `anecdotes_analysis_rule` resource for managing the analysis rules an account
+  authors: a query evaluated against one evidence's collected data, raising a
+  gap or a warning on the rows it matches. Covers the full lifecycle including
+  `rule_state`, which the platform applies through a separate call. Rules
+  shipped with the platform are read-only and cannot be managed.
+- `anecdotes_analysis_rule` and `anecdotes_analysis_rules` data sources for
+  looking up a single rule or listing rules, filterable by evidence, origin,
+  state and type. Deleted rules are archived rather than removed and are
+  excluded unless `include_archived` is set.
+- `service_instance_ids` on the `anecdotes_evidences` data source, reporting the
+  service instances that collected an evidence. These are the values an analysis
+  rule's `account_scoping_list` is expressed in.
 - `anecdotes_playbook` resource for managing automations that run one or more
   steps when a platform event fires or on a schedule. Steps are configured as a
   nested list; a step can be chained to another by pointing its `trigger_event`

@@ -63,4 +63,5 @@ Read-Only:
 - `processing_state` (String) The processing state of the evidence (e.g., "success_data_exists").
 - `service_display_name` (String) The display name of the service/plugin.
 - `service_id` (String) The service/plugin ID that provides this evidence.
+- `service_instance_ids` (List of String) IDs of the service instances that collected this evidence, the instance it originated from first. These are the values an analysis rule's `account_scoping_list` is expressed in, though a rule additionally requires the instance to still be installed.
 - `url` (String) The URL of the evidence, if applicable.

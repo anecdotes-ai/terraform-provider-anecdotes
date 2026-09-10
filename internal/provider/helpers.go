@@ -47,3 +47,14 @@ func optionalFloat64Ptr(v types.Float64) *float64 {
 	f := v.ValueFloat64()
 	return &f
 }
+
+// stringOrNull converts an API string into a Terraform value, mapping "" to
+// null. The platform sends JSON null for a field it holds no value for, which
+// decodes into the empty string; keeping that as "" would report a value the
+// platform never set.
+func stringOrNull(v string) types.String {
+	if v == "" {
+		return types.StringNull()
+	}
+	return types.StringValue(v)
+}

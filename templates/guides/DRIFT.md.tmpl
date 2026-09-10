@@ -25,6 +25,27 @@ Reverting a change is the default because it is what a configuration file means:
 if `owners = ["a@example.com"]` is in the configuration, that is the intended
 state, and any other value is drift.
 
+## Analysis rule queries
+
+`anecdotes_analysis_rule.rule_query` is Terraform-owned, and drift on it is
+detected against the query the platform stored rather than the text in the
+configuration. Editing a rule's query in the Anecdotes application therefore
+shows up on the next plan and is reverted on apply.
+
+A query the platform re-serialized is not drift: the provider compares the stored
+query against the configured one structurally, so the platform's key order and
+spacing never produce a pending change. A change in a value's *type* is a real
+difference, so writing `"true"` where the platform stores `true` reports drift
+that applying cannot settle. Use `jsonencode()` to get the types right.
+
+Note that a rule condition is stored with only `operator`, `left` and `right`,
+whether it is an `aql` query or the condition under an `aqlext` query's `filters`
+key. The provider rejects other keys at plan time, so they never reach state and
+never appear as drift.
+
+`rule_origin`, `rule_query_str`, `rule_query_message`, `last_updated` and
+`last_updated_by` are platform-owned and never written back.
+
 ## Seeing drift
 
 `terraform plan` refreshes state and shows what an apply would change:
