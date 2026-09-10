@@ -77,6 +77,43 @@ func TestMapRoleToState_SetsEffectivePermissionsFromResolvedSet(t *testing.T) {
 	}
 }
 
+// mapRoleToState must never let a re-fetched CreatedAt overwrite an already
+// -known one. Confirmed live: the platform bumps created_at on every
+// PUT /roles, the same as updated_at — not a stable creation timestamp
+// server-side. created_at carries UseStateForUnknown, so Update's plan
+// already holds the prior known value; if mapRoleToState blindly copied the
+// freshly re-fetched (now-bumped) value in, Terraform would report
+// "provider produced inconsistent result after apply" on every update — which
+// is exactly what happened before this was fixed (caught by
+// TestAccRoleResource_update against a live tenant, not by this test, since a
+// pure unit test can't see the platform bump anywhere but here).
+func TestMapRoleToState_PreservesCreatedAtAcrossUpdate(t *testing.T) {
+	ctx := context.Background()
+	data := &RoleResourceModel{CreatedAt: types.StringValue("2026-01-01T00:00:00Z")}
+
+	role := &client.Role{
+		Key:  "cst_00000000_demorole",
+		Name: "DemoRole",
+		// The platform's write-time bookkeeping value — deliberately later
+		// than, and different from, the already-known state value above.
+		CreatedAt: "2026-01-02T00:00:00Z",
+		UpdatedAt: "2026-01-02T00:00:00Z",
+	}
+
+	var d diag.Diagnostics
+	mapRoleToState(ctx, role, data, &d)
+	if d.HasError() {
+		t.Fatalf("mapRoleToState: %v", d)
+	}
+
+	if data.CreatedAt.ValueString() != "2026-01-01T00:00:00Z" {
+		t.Errorf("CreatedAt must stay as it was in state, got %q", data.CreatedAt.ValueString())
+	}
+	if data.UpdatedAt.ValueString() != "2026-01-02T00:00:00Z" {
+		t.Errorf("UpdatedAt should always reflect the fresh value, got %q", data.UpdatedAt.ValueString())
+	}
+}
+
 // TestAccRoleResource_create covers the simplest case: no extends, no
 // permissions.
 func TestAccRoleResource_create(t *testing.T) {

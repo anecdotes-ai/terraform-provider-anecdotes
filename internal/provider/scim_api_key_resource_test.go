@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 )
 
 func TestAccScimApiKeyResource_create(t *testing.T) {
@@ -37,7 +38,6 @@ resource "anecdotes_scim_api_key" "test" {
 func TestAccScimApiKeyResource_rename(t *testing.T) {
 	name1 := randomName("scim-rename")
 	name2 := randomName("scim-renamed")
-	var firstKeyID string
 
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
@@ -48,13 +48,18 @@ func TestAccScimApiKeyResource_rename(t *testing.T) {
 resource "anecdotes_scim_api_key" "test" {
   api_key_name = %q
 }`, name1),
-				Check: resource.TestCheckResourceAttrPtr("anecdotes_scim_api_key.test", "key_id", &firstKeyID),
+				Check: resource.TestCheckResourceAttr("anecdotes_scim_api_key.test", "api_key_name", name1),
 			},
 			{
 				Config: fmt.Sprintf(`
 resource "anecdotes_scim_api_key" "test" {
   api_key_name = %q
 }`, name2),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("anecdotes_scim_api_key.test", plancheck.ResourceActionDestroyBeforeCreate),
+					},
+				},
 				Check: resource.TestCheckResourceAttr("anecdotes_scim_api_key.test", "api_key_name", name2),
 			},
 		},

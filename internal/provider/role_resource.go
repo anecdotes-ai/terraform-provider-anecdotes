@@ -256,7 +256,17 @@ func mapRoleToState(ctx context.Context, role *client.Role, data *RoleResourceMo
 	data.RoleID = types.StringValue(role.Key)
 	data.Name = types.StringValue(role.Name)
 	data.Description = types.StringValue(role.Description)
-	data.CreatedAt = types.StringValue(role.CreatedAt)
+
+	// Confirmed live: the platform bumps created_at on every PUT /roles (a
+	// full-object replace), the same as updated_at — it is not a stable
+	// creation timestamp server-side. created_at carries UseStateForUnknown,
+	// so Update's plan already has the prior known value; only fill it in
+	// when it isn't already known (Create), or every Update would report a
+	// "provider produced inconsistent result" error for silently adopting
+	// whatever the platform's write-time bookkeeping now says.
+	if data.CreatedAt.IsNull() || data.CreatedAt.IsUnknown() {
+		data.CreatedAt = types.StringValue(role.CreatedAt)
+	}
 	data.UpdatedAt = types.StringValue(role.UpdatedAt)
 
 	effectivePermissions, setDiags := types.SetValueFrom(ctx, types.StringType, role.Permissions)
