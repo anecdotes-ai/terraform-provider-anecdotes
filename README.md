@@ -79,14 +79,28 @@ anecdotes_framework_folder        # Folder that groups frameworks
                             │
                             └── anecdotes_requirement           # Operational requirement (shared across frameworks)
                                     │
+                                    ├── anecdotes_requirement_view              # Requirement scoped beneath a parent requirement
+                                    │
                                     └── anecdotes_mapping_requirement_evidence  # Links a requirement to evidence
+                                            │
+                                            └── evidence                        # Collected data (anecdotes_evidences data source)
+                                                    │
+                                                    └── anecdotes_analysis_rule # Query evaluated against one evidence (1:N)
+
+anecdotes_playbook                # Event- or schedule-driven automation
+    │
+    └── step                       # One or more steps, nested in the playbook (1:N)
 ```
 
 - **Framework** — a compliance standard container (for example SOC 2, ISO 27001).
 - **Framework folder** — a container that groups frameworks. Every framework belongs to one.
 - **Control** — a prescriptive statement of what should be implemented, grouped by control category.
 - **Requirement** — an operational action that satisfies controls; requirements can be shared across frameworks.
+- **Requirement view** — a requirement scoped beneath a parent requirement, letting the same content apply per control or framework without duplicating it.
+- **Evidence** — data collected from a connected service, read through the `anecdotes_evidences` data source.
+- **Analysis rule** — a query evaluated against one evidence's collected data, raising a gap or a warning on the rows it matches.
 - **Mappings** — the M:N links between controls and requirements, and between requirements and evidence.
+- **Playbook** — an automation that runs one or more steps when a platform event fires or on a schedule.
 
 ---
 
