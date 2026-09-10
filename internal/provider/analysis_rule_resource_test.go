@@ -734,3 +734,26 @@ resource "anecdotes_analysis_rule" "test" {
 		},
 	})
 }
+
+// TestAccAnalysisRule_rejectsEmptyName: the platform keeps the value it holds
+// rather than storing an empty one, so an explicitly empty name would be applied
+// as something other than what was written. Removing the attribute is the
+// supported way to leave it alone.
+func TestAccAnalysisRule_rejectsEmptyName(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccEvidencePreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: fmt.Sprintf(`
+resource "anecdotes_analysis_rule" "test" {
+  evidence_id = %[1]q
+  rule_name   = ""
+  rule_query  = %[2]q
+}
+`, testAccEvidenceID(), testAQLQuery),
+				ExpectError: regexp.MustCompile(`string length must be at least 1`),
+			},
+		},
+	})
+}

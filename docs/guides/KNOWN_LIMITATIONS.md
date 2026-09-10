@@ -78,10 +78,11 @@ The following behave differently:
   applied visibility. Set an empty set to hide every status.
 - `anecdotes_requirement.category` — always has a value (default
   `Custom Requirements`); set a different category rather than removing it.
-- `anecdotes_analysis_rule.rule_name` and `rule_message` — the API ignores an
-  empty value on update, so these can be changed but not cleared once set.
-  Removing the attribute keeps the value the platform holds rather than failing;
-  set a new value to change it.
+- `anecdotes_analysis_rule.rule_name` and `rule_message` — the platform keeps the
+  value it holds rather than storing an empty one, so these can be changed but
+  not cleared once set. Removing the attribute leaves the stored value in place;
+  an empty string is rejected while planning, because it would otherwise apply as
+  something other than what was written. Set a new value to change one.
 
 Everything else clears normally. Removing `maturity_level` clears the level on
 the platform, setting a description to `""` empties it, and `owners` — on both

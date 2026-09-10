@@ -120,11 +120,17 @@ source to read them.
 				Description: "The rule's display name. Removing the attribute keeps the current value, which the platform will not clear.",
 				Optional:    true,
 				Computed:    true,
+				Validators: []validator.String{
+					stringvalidator.LengthAtLeast(1),
+				},
 			},
 			"rule_message": schema.StringAttribute{
 				Description: "The message shown for rows the rule matches. Removing the attribute keeps the current value, which the platform will not clear.",
 				Optional:    true,
 				Computed:    true,
+				Validators: []validator.String{
+					stringvalidator.LengthAtLeast(1),
+				},
 			},
 			"alert_level": schema.Int64Attribute{
 				Description: "Severity raised by the rule: 30 (warning) or 50 (gap). Defaults to 50.",
