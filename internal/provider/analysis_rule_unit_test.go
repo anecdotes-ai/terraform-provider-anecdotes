@@ -227,6 +227,13 @@ func TestValidateRuleQuery(t *testing.T) {
 			query:     `{"manipulations":[{"operator_name":"JoinLeftMinusRight","other_instance_id":"UAM","on_left_column":"Email"}]}`,
 		},
 		{
+			// A manipulation can carry its own condition, stored the same way.
+			name:      "aqlext manipulation conditions are checked",
+			queryType: types.StringValue("aqlext"),
+			query:     `{"manipulations":[{"operator_name":"JoinLeftMinusRight","filter_on_other":{"operator":"Is","left":"a","right":"b","aql_column_name":"X"}}]}`,
+			wantError: true,
+		},
+		{
 			// The condition under "filters" is an ordinary AQL condition and is
 			// stored the same way, so extra keys there are discarded too.
 			name:      "aqlext filters are checked as a condition",

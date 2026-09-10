@@ -285,6 +285,18 @@ func validateRuleQuery(data *AnalysisRuleResourceModel, diags *diag.Diagnostics)
 			if filters, ok := obj["filters"]; ok {
 				collectUnsupportedAQLKeys(filters, "filters", &found)
 			}
+			// A manipulation can carry its own condition, stored the same way.
+			if manipulations, ok := obj["manipulations"].([]interface{}); ok {
+				for i, m := range manipulations {
+					step, ok := m.(map[string]interface{})
+					if !ok {
+						continue
+					}
+					if on, ok := step["filter_on_other"]; ok {
+						collectUnsupportedAQLKeys(on, fmt.Sprintf("manipulations[%d].filter_on_other", i), &found)
+					}
+				}
+			}
 		}
 	case "pandas":
 		// A "pandas" query is a expression string, and it is stored lowercased.
