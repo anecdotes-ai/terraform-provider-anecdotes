@@ -79,10 +79,9 @@ The following behave differently:
 - `anecdotes_requirement.category` — always has a value (default
   `Custom Requirements`); set a different category rather than removing it.
 - `anecdotes_analysis_rule.rule_name` and `rule_message` — the API ignores an
-  empty value on update, so these can be changed but not cleared once set. The
-  apply that removes one fails, because the platform returns the retained value
-  where the plan expected none, and every plan after it reports a difference that
-  cannot be resolved. Set a new value rather than removing the attribute.
+  empty value on update, so these can be changed but not cleared once set.
+  Removing the attribute keeps the value the platform holds rather than failing;
+  set a new value to change it.
 
 Everything else clears normally. Removing `maturity_level` clears the level on
 the platform, setting a description to `""` empties it, and `owners` — on both
@@ -287,9 +286,10 @@ The list also cannot be emptied while `account_scoping_type` stays
 which clears the list as part of the change.
 
 **`rule_state` is applied by a separate call.** Creating an inactive rule takes a
-create followed by a state change. If the state change fails the rule still
-exists and is recorded in state as active, with a warning; the next apply retries
-it.
+create followed by a state change. If the state change fails, the rule still
+exists and is recorded as configured, with a warning saying so; the next plan
+reports the difference against the platform and applies the state change on its
+own.
 
 ## Enumerated values
 

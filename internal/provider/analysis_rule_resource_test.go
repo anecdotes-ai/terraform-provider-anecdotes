@@ -700,3 +700,37 @@ func TestAccAnalysisRule_rejectsInvalidEnumValues(t *testing.T) {
 		})
 	}
 }
+
+// TestAccAnalysisRule_removingNameKeepsPlatformValue: the platform ignores an
+// emptied name, so removing the attribute has to settle on the value it holds.
+// Reporting the configuration's null instead fails the apply and leaves state
+// disagreeing with the configuration with no way back.
+func TestAccAnalysisRule_removingNameKeepsPlatformValue(t *testing.T) {
+	name := randomName("tf-acc-rule-keepname")
+	const addr = "anecdotes_analysis_rule.test"
+
+	without := fmt.Sprintf(`
+resource "anecdotes_analysis_rule" "test" {
+  evidence_id = %[1]q
+  rule_query  = %[2]q
+}
+`, testAccEvidenceID(), testAQLQuery)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccEvidencePreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccAnalysisRuleConfig(name, testAQLQuery, ""),
+				Check:  resource.TestCheckResourceAttr(addr, "rule_name", name),
+			},
+			{
+				Config: without,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(addr, "rule_name", name),
+					resource.TestCheckResourceAttr(addr, "rule_message", "managed by acceptance tests"),
+				),
+			},
+		},
+	})
+}

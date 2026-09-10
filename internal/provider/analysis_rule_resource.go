@@ -117,12 +117,14 @@ source to read them.
 				},
 			},
 			"rule_name": schema.StringAttribute{
-				Description: "The rule's display name. Once set, it can be changed but not cleared.",
+				Description: "The rule's display name. Removing the attribute keeps the current value, which the platform will not clear.",
 				Optional:    true,
+				Computed:    true,
 			},
 			"rule_message": schema.StringAttribute{
-				Description: "The message shown for rows the rule matches. Once set, it can be changed but not cleared.",
+				Description: "The message shown for rows the rule matches. Removing the attribute keeps the current value, which the platform will not clear.",
 				Optional:    true,
+				Computed:    true,
 			},
 			"alert_level": schema.Int64Attribute{
 				Description: "Severity raised by the rule: 30 (warning) or 50 (gap). Defaults to 50.",
@@ -500,12 +502,16 @@ func (r *AnalysisRuleResource) Create(ctx context.Context, req resource.CreateRe
 	// here is reported as a warning: the id still reaches state, and the next
 	// plan sees rule_state differ and retries just the state change. Failing
 	// the apply instead would leave the rule outside Terraform's control.
+	stateApplied := true
 	if data.RuleState.ValueString() == "inactive" {
 		if err := r.client.SetAnalysisRuleState(ctx, created.RuleID, "inactive"); err != nil {
+			stateApplied = false
 			resp.Diagnostics.AddWarning(
 				"Analysis Rule Created But Not Deactivated",
 				fmt.Sprintf("Rule %s was created but could not be set to inactive: %s\n\n"+
-					"The rule is recorded in state and is currently active. Run apply again to retry.", created.RuleID, err),
+					"The rule is recorded in state as configured and is currently active on the "+
+					"platform. The next plan reports the difference and applies the state change "+
+					"on its own.", created.RuleID, err),
 			)
 		}
 	}
@@ -519,7 +525,17 @@ func (r *AnalysisRuleResource) Create(ctx context.Context, req resource.CreateRe
 	}
 
 	checkScopingAccepted(ctx, &resp.Diagnostics, &data, rule)
+
+	plannedState := data.RuleState
 	applyAnalysisRule(ctx, &resp.Diagnostics, &data, rule)
+	// Recording the state the platform reports here would contradict the plan,
+	// which fails the apply and leaves the rule untracked. Keeping the planned
+	// value lets the apply finish; the next read finds the rule still active and
+	// plans the state change again.
+	if !stateApplied {
+		data.RuleState = plannedState
+	}
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 

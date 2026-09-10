@@ -117,8 +117,8 @@ Compared as JSON rather than as text, so key order and whitespace do not produce
 - `account_scoping_type` (String) Which accounts the rule applies to: "all_accounts", "included_accounts" or "excluded_accounts". Defaults to "all_accounts".
 - `alert_level` (Number) Severity raised by the rule: 30 (warning) or 50 (gap). Defaults to 50.
 - `library_rule_id` (String) The library rule this rule was derived from, recorded for reference. Changing it replaces the rule.
-- `rule_message` (String) The message shown for rows the rule matches. Once set, it can be changed but not cleared.
-- `rule_name` (String) The rule's display name. Once set, it can be changed but not cleared.
+- `rule_message` (String) The message shown for rows the rule matches. Removing the attribute keeps the current value, which the platform will not clear.
+- `rule_name` (String) The rule's display name. Removing the attribute keeps the current value, which the platform will not clear.
 - `rule_query_type` (String) The query language of `rule_query`: "aql", "aqlext" or "pandas". Defaults to "aql". Changing it replaces the rule.
 - `rule_state` (String) Whether the rule is evaluated: "active" or "inactive". Defaults to "active".
 - `rule_type` (String) Optional processing type: "uam" or "eid". Changing it replaces the rule.
