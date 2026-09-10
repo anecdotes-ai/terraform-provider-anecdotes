@@ -234,6 +234,20 @@ func TestValidateRuleQuery(t *testing.T) {
 			wantError: true,
 		},
 		{
+			// A query can be built on top of another, and the conditions the
+			// nested one carries are stored the same way.
+			name:      "aqlext base query is walked",
+			queryType: types.StringValue("aqlext"),
+			query:     `{"manipulations":[],"base":{"filters":{"operator":"Is","left":"a","right":"b","aql_column_name":"X"}}}`,
+			wantError: true,
+		},
+		{
+			name:      "aqlext base manipulation conditions are walked",
+			queryType: types.StringValue("aqlext"),
+			query:     `{"base":{"base":{"manipulations":[{"operator_name":"JoinLeftMinusRight","filter_on_other":{"operator":"Is","left":"a","right":"b","bogus":1}}]}}}`,
+			wantError: true,
+		},
+		{
 			// The condition under "filters" is an ordinary AQL condition and is
 			// stored the same way, so extra keys there are discarded too.
 			name:      "aqlext filters are checked as a condition",

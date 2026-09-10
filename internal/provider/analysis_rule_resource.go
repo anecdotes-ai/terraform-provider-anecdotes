@@ -252,6 +252,39 @@ func collectUnsupportedAQLKeys(v interface{}, at string, found *[]string) {
 	}
 }
 
+// collectUnsupportedAQLExtKeys walks an "aqlext" query and checks every
+// condition it carries: the one under "filters", the one a manipulation carries
+// in "filter_on_other", and both again inside a query built on top of another.
+func collectUnsupportedAQLExtKeys(v interface{}, at string, found *[]string) {
+	obj, ok := v.(map[string]interface{})
+	if !ok {
+		return
+	}
+
+	prefix := ""
+	if at != "" {
+		prefix = at + "."
+	}
+
+	if filters, ok := obj["filters"]; ok {
+		collectUnsupportedAQLKeys(filters, prefix+"filters", found)
+	}
+	if manipulations, ok := obj["manipulations"].([]interface{}); ok {
+		for i, m := range manipulations {
+			step, ok := m.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			if on, ok := step["filter_on_other"]; ok {
+				collectUnsupportedAQLKeys(on, fmt.Sprintf("%smanipulations[%d].filter_on_other", prefix, i), found)
+			}
+		}
+	}
+	if base, ok := obj["base"]; ok {
+		collectUnsupportedAQLExtKeys(base, prefix+"base", found)
+	}
+}
+
 // validateRuleQuery rejects a query carrying keys the platform does not store,
 // so the mismatch is reported against the attribute at plan time rather than as
 // an unexplained difference after the rule is written.
@@ -281,23 +314,7 @@ func validateRuleQuery(data *AnalysisRuleResourceModel, diags *diag.Diagnostics)
 	case "aql":
 		collectUnsupportedAQLKeys(decoded, "", &found)
 	case "aqlext":
-		if obj, ok := decoded.(map[string]interface{}); ok {
-			if filters, ok := obj["filters"]; ok {
-				collectUnsupportedAQLKeys(filters, "filters", &found)
-			}
-			// A manipulation can carry its own condition, stored the same way.
-			if manipulations, ok := obj["manipulations"].([]interface{}); ok {
-				for i, m := range manipulations {
-					step, ok := m.(map[string]interface{})
-					if !ok {
-						continue
-					}
-					if on, ok := step["filter_on_other"]; ok {
-						collectUnsupportedAQLKeys(on, fmt.Sprintf("manipulations[%d].filter_on_other", i), &found)
-					}
-				}
-			}
-		}
+		collectUnsupportedAQLExtKeys(decoded, "", &found)
 	case "pandas":
 		// A "pandas" query is a expression string, and it is stored lowercased.
 		// Writing it in any other case would store a different expression than
@@ -511,9 +528,10 @@ func (r *AnalysisRuleResource) Create(ctx context.Context, req resource.CreateRe
 
 	// A new rule is always created active, so an inactive rule takes a second
 	// call. The rule itself exists once the call above succeeds, so a failure
-	// here is reported as a warning: the id still reaches state, and the next
-	// plan sees rule_state differ and retries just the state change. Failing
-	// the apply instead would leave the rule outside Terraform's control.
+	// here is reported as a warning: the next plan sees rule_state differ and
+	// retries just the state change. Reporting an error instead would mark the
+	// rule for replacement, so the next apply would build a new one rather than
+	// finish configuring this one.
 	stateApplied := true
 	if data.RuleState.ValueString() == "inactive" {
 		if err := r.client.SetAnalysisRuleState(ctx, created.RuleID, "inactive"); err != nil {
@@ -540,10 +558,11 @@ func (r *AnalysisRuleResource) Create(ctx context.Context, req resource.CreateRe
 
 	plannedState := data.RuleState
 	applyAnalysisRule(ctx, &resp.Diagnostics, &data, rule)
-	// Recording the state the platform reports here would contradict the plan,
-	// which fails the apply and leaves the rule untracked. Keeping the planned
+	// Recording the state the platform reports here would contradict the plan
+	// and fail the apply, marking the rule for replacement. Keeping the planned
 	// value lets the apply finish; the next read finds the rule still active and
-	// plans the state change again.
+	// plans the state change again. That read is what surfaces it, so a plan
+	// that skips refreshing will not show the difference.
 	if !stateApplied {
 		data.RuleState = plannedState
 	}
