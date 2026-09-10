@@ -47,6 +47,17 @@ the major version.
 - `anecdotes_playbook_action_library` data source listing the actions a playbook
   step can perform.
 
+### Fixed
+
+- `anecdotes_control` applies the name, description and category returned by the
+  API after a create or an update, instead of keeping the planned values. Owners
+  and maturity level are written through their own endpoints and continue to
+  settle on the configured value.
+- An update whose response carries no control id no longer clears the id from
+  state; the control is read back instead.
+- `anecdotes_control_category` applies the created category to state instead of
+  only its id.
+
 ---
 
 ## [1.1.1] - 2026-08-30

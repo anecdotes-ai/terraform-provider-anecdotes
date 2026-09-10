@@ -10,6 +10,7 @@ import (
 
 	"github.com/anecdotes-ai/terraform-provider-anecdotes/internal/client"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -184,7 +185,10 @@ func (r *ControlResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
-	data.ControlID = types.StringValue(control.ControlID)
+	r.setControlState(ctx, &resp.Diagnostics, &data, control)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 
 	// Set maturity level if user specified it (separate API call)
 	if !data.MaturityLevel.IsNull() && !data.MaturityLevel.IsUnknown() {
@@ -235,14 +239,7 @@ func (r *ControlResource) Read(ctx context.Context, req resource.ReadRequest, re
 		return
 	}
 
-	// Update state with API response
-	data.Name = types.StringValue(control.ControlName)
-	data.Description = types.StringValue(control.ControlDescription)
-	if control.ControlFrameworkCategoryID != "" {
-		data.CategoryID = types.StringValue(control.ControlFrameworkCategoryID)
-	}
-
-	data.Owners = stringSetFromAPI(ctx, &resp.Diagnostics, data.Owners, control.ControlOwners)
+	r.setControlState(ctx, &resp.Diagnostics, &data, control)
 
 	level, err := r.client.GetControlMaturityLevel(ctx, data.ControlID.ValueString())
 	if err != nil {
@@ -282,6 +279,7 @@ func (r *ControlResource) Update(ctx context.Context, req resource.UpdateRequest
 	}
 
 	// Terraform owns the attribute: absent means no owners.
+	plannedOwners := data.Owners
 	owners := []string{}
 	if !data.Owners.IsNull() && !data.Owners.IsUnknown() {
 		resp.Diagnostics.Append(data.Owners.ElementsAs(ctx, &owners, false)...)
@@ -292,8 +290,14 @@ func (r *ControlResource) Update(ctx context.Context, req resource.UpdateRequest
 	}
 
 	// Call API
-	if _, err := r.client.UpdateControl(ctx, data.FrameworkID.ValueString(), data.ControlID.ValueString(), updateReq); err != nil {
+	control, err := r.client.UpdateControl(ctx, data.FrameworkID.ValueString(), data.ControlID.ValueString(), updateReq)
+	if err != nil {
 		addClientError(&resp.Diagnostics, "update control", err)
+		return
+	}
+
+	r.setControlState(ctx, &resp.Diagnostics, &data, control)
+	if resp.Diagnostics.HasError() {
 		return
 	}
 
@@ -302,13 +306,33 @@ func (r *ControlResource) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 
+	// The owners write lands after the update call, so the response above predates it.
+	// The planned value is what was just written, and it distinguishes an absent
+	// attribute from an empty one.
+	data.Owners = plannedOwners
+
 	// An absent attribute clears the maturity level.
 	if err := r.client.SetControlMaturityLevel(ctx, data.ControlID.ValueString(), data.MaturityLevel.ValueString()); err != nil {
 		addClientError(&resp.Diagnostics, "set control maturity level", err)
 		return
 	}
+	if data.MaturityLevel.ValueString() == "" {
+		data.MaturityLevel = types.StringNull()
+	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+}
+
+// setControlState fills the model from a control returned by the API, so create, read
+// and update settle on the same state shape.
+func (r *ControlResource) setControlState(ctx context.Context, diags *diag.Diagnostics, data *ControlResourceModel, control *client.Control) {
+	data.ControlID = types.StringValue(control.ControlID)
+	data.Name = types.StringValue(control.ControlName)
+	data.Description = types.StringValue(control.ControlDescription)
+	if control.ControlFrameworkCategoryID != "" {
+		data.CategoryID = types.StringValue(control.ControlFrameworkCategoryID)
+	}
+	data.Owners = stringSetFromAPI(ctx, diags, data.Owners, control.ControlOwners)
 }
 
 func (r *ControlResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {

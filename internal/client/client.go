@@ -650,6 +650,12 @@ func (c *AnecdotesClient) UpdateControl(ctx context.Context, frameworkID, contro
 		return c.GetControl(ctx, frameworkID, controlID)
 	}
 
+	// A body that parses but carries no identifier is a partial response, not a
+	// representation of the control. Read the control back instead.
+	if result.ControlID == "" {
+		return c.GetControl(ctx, frameworkID, controlID)
+	}
+
 	return &result, nil
 }
 
