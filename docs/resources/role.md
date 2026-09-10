@@ -35,17 +35,18 @@ resource "anecdotes_role" "auditor_readonly" {
 ### Required
 
 - `name` (String) The name of the role.
-- `permissions` (List of String) List of permissions (e.g. `control:read`, `evidence:read`).
+- `permissions` (Set of String) Permissions to submit for this role (e.g. `control:read`, `evidence:read`). **The platform accepts and echoes this list but does not persist or enforce it** — a role's real, effective permissions are always the inheritance-expanded resolution of `extends`. See `effective_permissions` for that resolved set. This attribute exists to match the API's create/update contract; it never reflects drift, since the platform has no way to report a change to it.
 
 ### Optional
 
 - `description` (String) The description of the role. If omitted, the platform auto-generates one.
-- `extends` (List of String) Base role keys this role inherits permissions from. Defaults to `["basic_role"]` if omitted.
+- `extends` (Set of String) Base role keys this role inherits permissions from. Defaults to `["basic_role"]` if omitted.
 - `full_access_frameworks` (List of String) Framework IDs this role has full access to. Omit for an unscoped role.
 
 ### Read-Only
 
 - `created_at` (String) Timestamp when the role was created.
+- `effective_permissions` (Set of String) The role's live, effective permission set — the inheritance-expanded resolution of `extends`, as returned by the platform. This is what actually governs access; `permissions` does not.
 - `role_id` (String) The role's key, server-generated once from `name` at creation. It never changes afterward, including on rename.
 - `updated_at` (String) Timestamp when the role was last updated.
 

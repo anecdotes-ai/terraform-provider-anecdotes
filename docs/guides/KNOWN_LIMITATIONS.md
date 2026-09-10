@@ -129,14 +129,26 @@ two configurations with the same `display_name` collide on the same identifier.
 Creating one fails with a conflict error rather than a generic uniqueness error
 — rename the configuration to resolve it.
 
-## SAML configuration delete is best-effort
+## SAML configuration rename does not carry provider_id forward
+
+`display_name` can be changed in place without replacing the resource, but
+`provider_id` is derived from `display_name` only once, at creation, and does
+not track a later rename. If Terraform state is lost after a rename,
+`provider_id` cannot be recomputed from the current `display_name` — look it
+up in the platform UI, or via the identity API's list endpoint, before
+importing. A later configuration created with the original (pre-rename)
+`display_name` also collides with the renamed one's `provider_id`, surfacing
+as a conflict on a name nobody is currently using.
+
+## SAML configuration delete confirms before treating a 502 as success
 
 The platform has no reliable way to report that a SAML configuration was
 already gone: an unknown `provider_id` and a genuine deletion failure both
-surface the same server error. `terraform destroy` treats that ambiguous
-response as success rather than getting permanently stuck on a configuration
-that was removed outside Terraform. If the delete genuinely failed for another
-reason, the configuration will still show up on the next `terraform plan`.
+surface the same plain-text 502. Rather than treat every 502 as success,
+`terraform destroy` follows up with a read — only when that confirms the
+configuration is actually gone does the destroy succeed. A 502 caused by a
+real, transient failure, with the configuration still present, surfaces as an
+ordinary error instead, so it still shows up on the next `terraform plan`.
 
 ## Login Methods settings is a singleton, without import
 
@@ -154,6 +166,13 @@ the last 8 characters. Store the value somewhere durable when you apply the
 resource; it cannot be retrieved again afterward, including via
 `terraform import` (an imported key's `key` attribute holds only the truncated
 value).
+
+This is also the one resource in this provider whose state file holds a
+working credential, not just a reference to one. `key` is marked `Sensitive`,
+so it is redacted from plan and apply output the same way the provider's own
+`api_key` is — but unlike `api_key`, this value **is** written to state and
+stays there for the life of the resource. Protect your state backend
+accordingly (see the README's authentication and secrets notes).
 
 ## Error reporting
 

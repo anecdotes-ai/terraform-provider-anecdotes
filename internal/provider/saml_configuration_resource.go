@@ -59,14 +59,14 @@ func (r *SamlConfigurationResource) Schema(ctx context.Context, req resource.Sch
 		Attributes: map[string]schema.Attribute{
 			"provider_id": schema.StringAttribute{
 				Computed:            true,
-				MarkdownDescription: "The configuration's identifier, server-generated from `display_name` at creation. Stable across updates, including a `display_name` change.",
+				MarkdownDescription: "The configuration's identifier, derived from `display_name` at creation and stable across updates — including a `display_name` change. Because it is a one-time derivation, not a live mapping, `provider_id` no longer corresponds to the current `display_name` after a rename: it keeps reflecting whatever `display_name` was set at creation. If state is lost after a rename, `provider_id` cannot be recomputed from the current `display_name` — look it up in the platform UI (or via the identity API's list endpoint) before importing.",
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"display_name": schema.StringAttribute{
-				Required:    true,
-				Description: "A display name for the configuration.",
+				Required:            true,
+				MarkdownDescription: "A display name for the configuration. Renameable in place — doing so does not replace the resource or affect `provider_id` — but see `provider_id`'s description for the recovery caveat that follows from that.",
 				Validators: []validator.String{
 					stringvalidator.LengthAtMost(30),
 					stringvalidator.RegexMatches(samlDisplayNamePattern, "must contain only word characters (letters, digits, underscore)"),
@@ -224,8 +224,11 @@ func (r *SamlConfigurationResource) Update(ctx context.Context, req resource.Upd
 
 // Delete removes a SAML configuration. The platform has no reliable not-found
 // signal for this endpoint — an unknown provider_id and a genuine upstream
-// failure both surface as a plain-text 502 — so a 502 here is treated as
-// best-effort success rather than failing the destroy.
+// failure both surface as a plain-text 502. A 502 is therefore not enough on
+// its own to treat as success: a follow-up GetSamlConfiguration confirms the
+// configuration is actually gone (ErrNotFound) before this reports success —
+// a 502 from a real transient failure, with the configuration still present,
+// still surfaces as an error rather than silently dropping it from state.
 func (r *SamlConfigurationResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var state SamlConfigurationResourceModel
 	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
@@ -233,16 +236,21 @@ func (r *SamlConfigurationResource) Delete(ctx context.Context, req resource.Del
 		return
 	}
 
-	if err := r.client.DeleteSamlConfiguration(ctx, state.ProviderID.ValueString()); err != nil {
-		if client.StatusCode(err) == 502 {
-			tflog.Warn(ctx, "SAML configuration delete returned 502; treating as best-effort success since the platform cannot distinguish an already-deleted configuration from a genuine failure", map[string]interface{}{
+	err := r.client.DeleteSamlConfiguration(ctx, state.ProviderID.ValueString())
+	if err == nil {
+		return
+	}
+
+	if client.StatusCode(err) == 502 {
+		if _, getErr := r.client.GetSamlConfiguration(ctx, state.ProviderID.ValueString()); client.IsNotFound(getErr) {
+			tflog.Warn(ctx, "SAML configuration delete returned 502, but a follow-up read confirms the configuration is gone; treating as success", map[string]interface{}{
 				"provider_id": state.ProviderID.ValueString(),
 			})
 			return
 		}
-		addClientError(&resp.Diagnostics, "delete SAML configuration", err)
-		return
 	}
+
+	addClientError(&resp.Diagnostics, "delete SAML configuration", err)
 }
 
 func (r *SamlConfigurationResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {

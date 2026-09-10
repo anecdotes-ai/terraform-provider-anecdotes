@@ -17,6 +17,30 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
+// RoleResourceModel describes the resource data model.
+//
+// Permissions is deliberately NOT sourced from the API on Read/Create/Update:
+// per the platform's own contract, a role's submitted permissions are echoed
+// back but never persisted or enforced — the role's real, effective permission
+// set is always the inheritance-expanded resolution of Extends, which List/Get
+// return. Treating that resolved set as this attribute's value made every
+// apply of a role with a non-empty Extends fail ("provider produced
+// inconsistent result after apply"), since Permissions is Required and the
+// resolved set almost never equals what was configured. Permissions therefore
+// always holds exactly what the user configured; the resolved set is exposed
+// separately as EffectivePermissions.
+type RoleResourceModel struct {
+	RoleID               types.String `tfsdk:"role_id"`
+	Name                 types.String `tfsdk:"name"`
+	Description          types.String `tfsdk:"description"`
+	Permissions          types.Set    `tfsdk:"permissions"`
+	EffectivePermissions types.Set    `tfsdk:"effective_permissions"`
+	Extends              types.Set    `tfsdk:"extends"`
+	FullAccessFrameworks types.List   `tfsdk:"full_access_frameworks"`
+	CreatedAt            types.String `tfsdk:"created_at"`
+	UpdatedAt            types.String `tfsdk:"updated_at"`
+}
+
 var _ resource.Resource = &RoleResource{}
 var _ resource.ResourceWithImportState = &RoleResource{}
 
@@ -27,18 +51,6 @@ func NewRoleResource() resource.Resource {
 // RoleResource manages a tenant-scoped custom RBAC role.
 type RoleResource struct {
 	client *client.AnecdotesClient
-}
-
-// RoleResourceModel describes the resource data model.
-type RoleResourceModel struct {
-	RoleID               types.String `tfsdk:"role_id"`
-	Name                 types.String `tfsdk:"name"`
-	Description          types.String `tfsdk:"description"`
-	Permissions          types.List   `tfsdk:"permissions"`
-	Extends              types.List   `tfsdk:"extends"`
-	FullAccessFrameworks types.List   `tfsdk:"full_access_frameworks"`
-	CreatedAt            types.String `tfsdk:"created_at"`
-	UpdatedAt            types.String `tfsdk:"updated_at"`
 }
 
 func (r *RoleResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -65,12 +77,17 @@ func (r *RoleResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 				Computed:            true,
 				MarkdownDescription: "The description of the role. If omitted, the platform auto-generates one.",
 			},
-			"permissions": schema.ListAttribute{
+			"permissions": schema.SetAttribute{
 				Required:            true,
 				ElementType:         types.StringType,
-				MarkdownDescription: "List of permissions (e.g. `control:read`, `evidence:read`).",
+				MarkdownDescription: "Permissions to submit for this role (e.g. `control:read`, `evidence:read`). **The platform accepts and echoes this list but does not persist or enforce it** — a role's real, effective permissions are always the inheritance-expanded resolution of `extends`. See `effective_permissions` for that resolved set. This attribute exists to match the API's create/update contract; it never reflects drift, since the platform has no way to report a change to it.",
 			},
-			"extends": schema.ListAttribute{
+			"effective_permissions": schema.SetAttribute{
+				Computed:            true,
+				ElementType:         types.StringType,
+				MarkdownDescription: "The role's live, effective permission set — the inheritance-expanded resolution of `extends`, as returned by the platform. This is what actually governs access; `permissions` does not.",
+			},
+			"extends": schema.SetAttribute{
 				Optional:            true,
 				Computed:            true,
 				ElementType:         types.StringType,
@@ -121,8 +138,8 @@ func (r *RoleResource) Create(ctx context.Context, req resource.CreateRequest, r
 		return
 	}
 
-	permissions := stringsFromList(ctx, plan.Permissions, &resp.Diagnostics)
-	extends := stringsFromList(ctx, plan.Extends, &resp.Diagnostics)
+	permissions := stringsFromSet(ctx, plan.Permissions, &resp.Diagnostics)
+	extends := stringsFromSet(ctx, plan.Extends, &resp.Diagnostics)
 	fullAccessFrameworks := stringsFromList(ctx, plan.FullAccessFrameworks, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
@@ -186,8 +203,8 @@ func (r *RoleResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		return
 	}
 
-	permissions := stringsFromList(ctx, plan.Permissions, &resp.Diagnostics)
-	extends := stringsFromList(ctx, plan.Extends, &resp.Diagnostics)
+	permissions := stringsFromSet(ctx, plan.Permissions, &resp.Diagnostics)
+	extends := stringsFromSet(ctx, plan.Extends, &resp.Diagnostics)
 	fullAccessFrameworks := stringsFromList(ctx, plan.FullAccessFrameworks, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
@@ -233,6 +250,8 @@ func (r *RoleResource) ImportState(ctx context.Context, req resource.ImportState
 }
 
 // mapRoleToState sets the Terraform state from the API role response.
+// Permissions is deliberately left untouched here — see RoleResourceModel's
+// doc comment for why the resolved set must never be written to it.
 func mapRoleToState(ctx context.Context, role *client.Role, data *RoleResourceModel, diags *diag.Diagnostics) {
 	data.RoleID = types.StringValue(role.Key)
 	data.Name = types.StringValue(role.Name)
@@ -240,12 +259,12 @@ func mapRoleToState(ctx context.Context, role *client.Role, data *RoleResourceMo
 	data.CreatedAt = types.StringValue(role.CreatedAt)
 	data.UpdatedAt = types.StringValue(role.UpdatedAt)
 
-	permissions, listDiags := types.ListValueFrom(ctx, types.StringType, role.Permissions)
-	diags.Append(listDiags...)
-	data.Permissions = permissions
+	effectivePermissions, setDiags := types.SetValueFrom(ctx, types.StringType, role.Permissions)
+	diags.Append(setDiags...)
+	data.EffectivePermissions = effectivePermissions
 
-	extends, listDiags := types.ListValueFrom(ctx, types.StringType, role.Extends)
-	diags.Append(listDiags...)
+	extends, setDiags := types.SetValueFrom(ctx, types.StringType, role.Extends)
+	diags.Append(setDiags...)
 	data.Extends = extends
 
 	if len(role.FullAccessFrameworks) > 0 {
@@ -255,16 +274,4 @@ func mapRoleToState(ctx context.Context, role *client.Role, data *RoleResourceMo
 	} else {
 		data.FullAccessFrameworks = types.ListNull(types.StringType)
 	}
-}
-
-// stringsFromList converts an optional/required list-of-string attribute into a
-// []string, or nil when the value is null/unknown (so it marshals to JSON null,
-// matching the platform's canonical "no value" representation for these fields).
-func stringsFromList(ctx context.Context, list types.List, diags *diag.Diagnostics) []string {
-	if list.IsNull() || list.IsUnknown() {
-		return nil
-	}
-	var values []string
-	diags.Append(list.ElementsAs(ctx, &values, false)...)
-	return values
 }

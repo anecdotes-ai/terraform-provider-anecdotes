@@ -3,7 +3,13 @@
 
 package provider
 
-import "github.com/hashicorp/terraform-plugin-framework/types"
+import (
+	"context"
+
+	"github.com/anecdotes-ai/terraform-provider-anecdotes/internal/client"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+)
 
 // These helpers convert an optional Terraform attribute into a pointer for an API
 // request struct (pointer + `omitempty`), so a field the user did not configure is
@@ -46,4 +52,44 @@ func optionalFloat64Ptr(v types.Float64) *float64 {
 	}
 	f := v.ValueFloat64()
 	return &f
+}
+
+// optionalStringValue converts a possibly-nil string pointer from the API into
+// a Terraform string value, null when the pointer is nil.
+func optionalStringValue(v *string) types.String {
+	if v == nil {
+		return types.StringNull()
+	}
+	return types.StringValue(*v)
+}
+
+// stringsFromList converts an optional/required list-of-string attribute into a
+// []string, or nil when the value is null/unknown (so it marshals to JSON null,
+// matching the platform's canonical "no value" representation for these fields).
+func stringsFromList(ctx context.Context, list types.List, diags *diag.Diagnostics) []string {
+	if list.IsNull() || list.IsUnknown() {
+		return nil
+	}
+	var values []string
+	diags.Append(list.ElementsAs(ctx, &values, false)...)
+	return values
+}
+
+// stringsFromSet converts an optional/required set-of-string attribute into a
+// []string, or nil when the value is null/unknown (so it marshals to JSON null,
+// matching the platform's canonical "no value" representation for these fields).
+func stringsFromSet(ctx context.Context, set types.Set, diags *diag.Diagnostics) []string {
+	if set.IsNull() || set.IsUnknown() {
+		return nil
+	}
+	var values []string
+	diags.Append(set.ElementsAs(ctx, &values, false)...)
+	return values
+}
+
+// isCustomRole reports whether a role is a tenant-scoped custom role (as
+// opposed to a built-in global role) based on its attributes map.
+func isCustomRole(role client.Role) bool {
+	_, ok := role.Attributes["tenant"]
+	return ok
 }

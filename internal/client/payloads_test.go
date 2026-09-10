@@ -578,6 +578,34 @@ func TestDeleteSamlConfiguration_502IsDistinguishableByStatusCode(t *testing.T) 
 	}
 }
 
+// ListRoles must not fail to parse a framework-scoped custom role.
+// `attributes` is a mixed-value map on the live API: {"tenant": "..."} for an
+// ordinary custom role, but {"tenant": "...", "full_access_frameworks": [...]}
+// — an array, not a string — for one scoped to specific frameworks.
+// map[string]string previously failed this unmarshal for the *entire* roles
+// list the moment any single role in the tenant carried that array value.
+func TestListRoles_ParsesFrameworkScopedRoleAttributes(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/apikey/exchange") {
+			_, _ = w.Write([]byte("test-token"))
+			return
+		}
+		_, _ = w.Write([]byte(`[{"key":"cst_scoped_role","name":"ScopedRole","description":"d","permissions":["control:read"],"attributes":{"tenant":"cst_00000000","full_access_frameworks":["790498536_cb1a5c3de0"]},"extends":["basic_role"],"created_at":"t1","updated_at":"t2","full_access_frameworks":["790498536_cb1a5c3de0"]}]`))
+	}))
+	defer srv.Close()
+
+	roles, err := newTestClient(t, srv).ListRoles(context.Background())
+	if err != nil {
+		t.Fatalf("ListRoles: %v", err)
+	}
+	if len(roles) != 1 {
+		t.Fatalf("expected 1 role, got %d", len(roles))
+	}
+	if tenant, _ := roles[0].Attributes["tenant"].(string); tenant != "cst_00000000" {
+		t.Errorf("expected attributes.tenant to survive parsing, got %v", roles[0].Attributes)
+	}
+}
+
 func stringPtr(s string) *string { return &s }
 
 func keysOf(m map[string]interface{}) []string {

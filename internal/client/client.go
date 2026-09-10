@@ -1402,12 +1402,37 @@ func (c *AnecdotesClient) GetRole(ctx context.Context, key string) (*Role, error
 	return nil, fmt.Errorf("role not found: %s: %w", key, ErrNotFound)
 }
 
+// getRoleByName finds a role by its name. Used to resolve a role this client
+// created when the create response cannot be used directly.
+func (c *AnecdotesClient) getRoleByName(ctx context.Context, name string) (*Role, error) {
+	roles, err := c.ListRoles(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, r := range roles {
+		if r.Name == name {
+			return &r, nil
+		}
+	}
+
+	return nil, fmt.Errorf("role not found: %s: %w", name, ErrNotFound)
+}
+
 // CreateRole creates a tenant-scoped custom role. The create response's
 // Permissions/FullAccessFrameworks are not guaranteed to reflect what is
 // actually persisted, so this re-fetches via ListRoles for the canonical values.
 func (c *AnecdotesClient) CreateRole(ctx context.Context, req *RoleCreateRequest) (*Role, error) {
 	respBody, err := c.doRequest(ctx, "POST", "/identity/v1/roles", req)
 	if err != nil {
+		// The platform sometimes returns a 5xx for a role that was actually
+		// created. The key is server-generated, so resolve and adopt the role
+		// by name rather than risk a duplicate on retry.
+		if IsServerError(err) {
+			if existing, lErr := c.getRoleByName(ctx, req.Name); lErr == nil && existing != nil {
+				return existing, nil
+			}
+		}
 		return nil, err
 	}
 
@@ -1485,6 +1510,15 @@ func (c *AnecdotesClient) GetSamlConfiguration(ctx context.Context, providerID s
 // GetSamlConfiguration call (which also picks up the platform-assigned idp_type).
 func (c *AnecdotesClient) CreateSamlConfiguration(ctx context.Context, req *SamlCreateRequest) (*SamlConfiguration, error) {
 	if _, err := c.doRequest(ctx, "POST", "/identity/v1/customer/saml", req); err != nil {
+		// The platform sometimes returns a 5xx for a configuration that was
+		// actually created. provider_id is deterministic, so resolve and adopt
+		// it rather than risk a duplicate (which would fail as a conflict
+		// anyway, since provider_id collides on a retried display_name).
+		if IsServerError(err) {
+			if existing, lErr := c.GetSamlConfiguration(ctx, ComputeSamlProviderID(req.DisplayName)); lErr == nil {
+				return existing, nil
+			}
+		}
 		return nil, err
 	}
 

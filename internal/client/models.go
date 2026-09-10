@@ -586,12 +586,16 @@ type Role struct {
 	// client always re-fetches after a write, so callers only ever see the
 	// resolved value.
 	Permissions []string `json:"permissions"`
-	// Attributes is {"tenant": "<tenant_id>"} for a custom role, or
-	// {"is_global_role": "true"} for a built-in global role.
-	Attributes map[string]string `json:"attributes"`
-	Extends    []string          `json:"extends"`
-	CreatedAt  string            `json:"created_at"`
-	UpdatedAt  string            `json:"updated_at"`
+	// Attributes is a mixed-value map: {"tenant": "<tenant_id>"} for a custom
+	// role, {"is_global_role": "true"} for a built-in global role, and — for a
+	// framework-scoped custom role — also {"full_access_frameworks": [...]}
+	// (an array, not a string). Only the "tenant" key's presence is used by
+	// this provider; map[string]string here would fail to parse the whole
+	// roles list the moment any role in the tenant carries that array value.
+	Attributes map[string]any `json:"attributes"`
+	Extends    []string       `json:"extends"`
+	CreatedAt  string         `json:"created_at"`
+	UpdatedAt  string         `json:"updated_at"`
 	// FullAccessFrameworks is nil (JSON null) when unscoped; nil and an empty
 	// list are equivalent and the platform normalizes to nil on every List/Get.
 	FullAccessFrameworks []string `json:"full_access_frameworks"`

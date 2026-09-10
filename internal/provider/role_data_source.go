@@ -125,10 +125,3 @@ func (d *RoleDataSource) Read(ctx context.Context, req datasource.ReadRequest, r
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
-
-// isCustomRole reports whether a role is a tenant-scoped custom role (as
-// opposed to a built-in global role) based on its attributes map.
-func isCustomRole(role client.Role) bool {
-	_, ok := role.Attributes["tenant"]
-	return ok
-}

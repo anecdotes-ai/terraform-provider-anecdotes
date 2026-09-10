@@ -169,9 +169,16 @@ func (r *ScimApiKeyResource) Read(ctx context.Context, req resource.ReadRequest,
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
+// Update should never be invoked: api_key_name is the only writable attribute,
+// and it is RequiresReplace since there is no update endpoint. Guarded
+// explicitly rather than left empty — last_used_date has no
+// UseStateForUnknown, so if this were ever reached it would otherwise fail
+// with a confusing framework error instead of a clear one.
 func (r *ScimApiKeyResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
-	// api_key_name is the only writable attribute, and it is RequiresReplace —
-	// there is no update endpoint, so this should never be invoked.
+	resp.Diagnostics.AddError(
+		"Update Not Supported",
+		"anecdotes_scim_api_key has no update endpoint; every writable attribute is RequiresReplace. This should be unreachable — please report it if you see this error.",
+	)
 }
 
 func (r *ScimApiKeyResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
@@ -181,7 +188,8 @@ func (r *ScimApiKeyResource) Delete(ctx context.Context, req resource.DeleteRequ
 		return
 	}
 
-	if err := r.client.DeleteScimApiKey(ctx, data.KeyID.ValueString()); err != nil {
+	err := r.client.DeleteScimApiKey(ctx, data.KeyID.ValueString())
+	if err != nil && !client.IsNotFound(err) {
 		addClientError(&resp.Diagnostics, "delete SCIM API key", err)
 		return
 	}
@@ -189,13 +197,4 @@ func (r *ScimApiKeyResource) Delete(ctx context.Context, req resource.DeleteRequ
 
 func (r *ScimApiKeyResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("key_id"), req, resp)
-}
-
-// optionalStringValue converts a possibly-nil string pointer from the API into
-// a Terraform string value, null when the pointer is nil.
-func optionalStringValue(v *string) types.String {
-	if v == nil {
-		return types.StringNull()
-	}
-	return types.StringValue(*v)
 }

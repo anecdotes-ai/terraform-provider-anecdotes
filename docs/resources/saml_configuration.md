@@ -33,7 +33,7 @@ resource "anecdotes_saml_configuration" "okta" {
 
 ### Required
 
-- `display_name` (String) A display name for the configuration.
+- `display_name` (String) A display name for the configuration. Renameable in place — doing so does not replace the resource or affect `provider_id` — but see `provider_id`'s description for the recovery caveat that follows from that.
 - `idp_entity_id` (String) The identity provider's entity ID.
 - `rp_entity_id` (String) The relying party (this platform's) entity ID.
 - `sso_url` (String) The identity provider's SSO URL.
@@ -42,7 +42,7 @@ resource "anecdotes_saml_configuration" "okta" {
 ### Read-Only
 
 - `idp_type` (String) Server-assigned, e.g. `okta`, `azuread`, or `custom`.
-- `provider_id` (String) The configuration's identifier, server-generated from `display_name` at creation. Stable across updates, including a `display_name` change.
+- `provider_id` (String) The configuration's identifier, derived from `display_name` at creation and stable across updates — including a `display_name` change. Because it is a one-time derivation, not a live mapping, `provider_id` no longer corresponds to the current `display_name` after a rename: it keeps reflecting whatever `display_name` was set at creation. If state is lost after a rename, `provider_id` cannot be recomputed from the current `display_name` — look it up in the platform UI (or via the identity API's list endpoint) before importing.
 
 ## Import
 
@@ -52,5 +52,10 @@ The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/c
 
 ```shell
 # Import a SAML configuration by its provider_id.
+#
+# provider_id is derived from display_name only once, at creation — it is not
+# recomputable from the current display_name after a rename. If you don't
+# already have the provider_id (e.g. state was lost after a rename), look it
+# up in the platform UI or via the identity API's list endpoint first.
 terraform import anecdotes_saml_configuration.example saml.a0000000000
 ```

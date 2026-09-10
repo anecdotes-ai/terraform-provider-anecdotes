@@ -98,6 +98,24 @@ func testCheckListCountMatchesTotalCount(resourceAddr, listAttr string) resource
 	}
 }
 
+// testCheckCollectionNotEmpty asserts a set/list attribute has at least one element.
+func testCheckCollectionNotEmpty(resourceAddr, attr string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		rs, ok := s.RootModule().Resources[resourceAddr]
+		if !ok {
+			return fmt.Errorf("resource %s not found in state", resourceAddr)
+		}
+		count, err := strconv.Atoi(rs.Primary.Attributes[attr+".#"])
+		if err != nil {
+			return fmt.Errorf("%s.# is not an integer: %s", attr, rs.Primary.Attributes[attr+".#"])
+		}
+		if count == 0 {
+			return fmt.Errorf("expected %s to be non-empty, got 0 elements", attr)
+		}
+		return nil
+	}
+}
+
 // randomName generates a unique test resource name to avoid collisions.
 func randomName(prefix string) string {
 	return fmt.Sprintf("tf-test-%s-%d", prefix, rand.Intn(99999))
