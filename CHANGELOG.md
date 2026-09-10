@@ -47,11 +47,6 @@ the major version.
 - `anecdotes_playbook_action_library` data source listing the actions a playbook
   step can perform.
 
-### Fixed
-
-- The README advertised 7 resources and omitted `anecdotes_requirement_view`,
-  which has shipped since 1.1.0.
-
 ---
 
 ## [1.1.1] - 2026-08-30
