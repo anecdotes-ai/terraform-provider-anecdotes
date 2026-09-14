@@ -56,6 +56,9 @@ func optionalFloat64Ptr(v types.Float64) *float64 {
 
 // optionalStringValue converts a possibly-nil string pointer from the API into
 // a Terraform string value, null when the pointer is nil.
+// NOTE: near-twin of stringOrNull, which nulls "" rather than a nil pointer —
+// the two null rules differ on purpose; never merge. A *string pointing at ""
+// is a value the platform did set, and stays "" here.
 func optionalStringValue(v *string) types.String {
 	if v == nil {
 		return types.StringNull()
@@ -92,4 +95,17 @@ func stringsFromSet(ctx context.Context, set types.Set, diags *diag.Diagnostics)
 func isCustomRole(role client.Role) bool {
 	_, ok := role.Attributes["tenant"]
 	return ok
+}
+
+// stringOrNull converts an API string into a Terraform value, mapping "" to
+// null. The platform sends JSON null for a field it holds no value for, which
+// decodes into the empty string; keeping that as "" would report a value the
+// platform never set.
+// NOTE: near-twin of optionalStringValue, which nulls a nil pointer rather than
+// "" — the two null rules differ on purpose; never merge.
+func stringOrNull(v string) types.String {
+	if v == "" {
+		return types.StringNull()
+	}
+	return types.StringValue(v)
 }

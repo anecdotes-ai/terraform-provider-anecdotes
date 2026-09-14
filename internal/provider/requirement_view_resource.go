@@ -124,20 +124,7 @@ the resource.
 }
 
 func (r *RequirementViewResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
-	if req.ProviderData == nil {
-		return
-	}
-
-	client, ok := req.ProviderData.(*client.AnecdotesClient)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *client.AnecdotesClient, got: %T. Please report this issue to the provider developers.", req.ProviderData),
-		)
-		return
-	}
-
-	r.client = client
+	r.client = configureClient(req.ProviderData, "Resource", &resp.Diagnostics)
 }
 
 func (r *RequirementViewResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -279,5 +266,5 @@ func (r *RequirementViewResource) setRequirementViewState(ctx context.Context, d
 	// own name — view_name must be read directly.
 	data.ViewName = types.StringValue(view.ViewName)
 	data.Category = types.StringValue(view.RequirementCategory)
-	data.Owners = ownersFromAPI(ctx, diags, data.Owners, view.RequirementOwners)
+	data.Owners = stringSetFromAPI(ctx, diags, data.Owners, view.RequirementOwners)
 }

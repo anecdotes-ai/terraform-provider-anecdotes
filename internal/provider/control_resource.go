@@ -141,20 +141,7 @@ Framework (anecdotes_framework)
 }
 
 func (r *ControlResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
-	if req.ProviderData == nil {
-		return
-	}
-
-	client, ok := req.ProviderData.(*client.AnecdotesClient)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *client.AnecdotesClient, got: %T. Please report this issue to the provider developers.", req.ProviderData),
-		)
-		return
-	}
-
-	r.client = client
+	r.client = configureClient(req.ProviderData, "Resource", &resp.Diagnostics)
 }
 
 func (r *ControlResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -255,7 +242,7 @@ func (r *ControlResource) Read(ctx context.Context, req resource.ReadRequest, re
 		data.CategoryID = types.StringValue(control.ControlFrameworkCategoryID)
 	}
 
-	data.Owners = ownersFromAPI(ctx, &resp.Diagnostics, data.Owners, control.ControlOwners)
+	data.Owners = stringSetFromAPI(ctx, &resp.Diagnostics, data.Owners, control.ControlOwners)
 
 	level, err := r.client.GetControlMaturityLevel(ctx, data.ControlID.ValueString())
 	if err != nil {

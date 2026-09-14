@@ -3,7 +3,7 @@
 Manage the [Anecdotes](https://anecdotes.ai) GRC (Governance, Risk & Compliance)
 compliance program as Infrastructure as Code.
 
-**12 resources** | **13 data sources** | Full create, read, update, delete, and import
+**14 resources** | **17 data sources** | Full create, read, update, delete, and import
 
 ---
 
@@ -79,14 +79,28 @@ anecdotes_framework_folder        # Folder that groups frameworks
                             │
                             └── anecdotes_requirement           # Operational requirement (shared across frameworks)
                                     │
+                                    ├── anecdotes_requirement_view              # Requirement scoped beneath a parent requirement
+                                    │
                                     └── anecdotes_mapping_requirement_evidence  # Links a requirement to evidence
+                                            │
+                                            └── evidence                        # Collected data (anecdotes_evidences data source)
+                                                    │
+                                                    └── anecdotes_analysis_rule # Query evaluated against one evidence (1:N)
+
+anecdotes_playbook                # Event- or schedule-driven automation
+    │
+    └── step                       # One or more steps, nested in the playbook (1:N)
 ```
 
 - **Framework** — a compliance standard container (for example SOC 2, ISO 27001).
 - **Framework folder** — a container that groups frameworks. Every framework belongs to one.
 - **Control** — a prescriptive statement of what should be implemented, grouped by control category.
 - **Requirement** — an operational action that satisfies controls; requirements can be shared across frameworks.
+- **Requirement view** — a requirement scoped beneath a parent requirement, letting the same content apply per control or framework without duplicating it.
+- **Evidence** — data collected from a connected service, read through the `anecdotes_evidences` data source.
+- **Analysis rule** — a query evaluated against one evidence's collected data, raising a gap or a warning on the rows it matches.
 - **Mappings** — the M:N links between controls and requirements, and between requirements and evidence.
+- **Playbook** — an automation that runs one or more steps when a platform event fires or on a schedule.
 
 Administration and Settings resources (below) are independent of this hierarchy —
 they configure tenant-level account settings rather than compliance content.
@@ -103,11 +117,14 @@ they configure tenant-level account settings rather than compliance content.
 | `anecdotes_control_category` | A category grouping controls in a framework. |
 | `anecdotes_requirement` | An operational requirement. |
 | `anecdotes_mapping_control_requirement` | Links a control to one or more requirements. |
+| `anecdotes_requirement_view` | A requirement scoped beneath a parent requirement. |
 | `anecdotes_mapping_requirement_evidence` | Links a requirement to a piece of evidence. |
 | `anecdotes_role` | A tenant-scoped custom RBAC role. |
 | `anecdotes_login_settings` | The tenant's Login Methods settings (singleton). |
 | `anecdotes_saml_configuration` | A SAML 2.0 identity provider configuration. |
 | `anecdotes_scim_api_key` | An API key scoped to SCIM provisioning. |
+| `anecdotes_analysis_rule` | A query evaluated against one evidence, raising a gap or a warning. |
+| `anecdotes_playbook` | An automation that runs steps on a platform event or a schedule. |
 
 ## Data Sources
 
@@ -116,10 +133,13 @@ they configure tenant-level account settings rather than compliance content.
 | `anecdotes_framework` / `anecdotes_frameworks` | Look up one framework, or list frameworks. |
 | `anecdotes_control` / `anecdotes_controls` | Look up one control, or list controls in a framework. |
 | `anecdotes_control_category` / `anecdotes_control_categories` | Look up one control category, or list them. |
-| `anecdotes_requirement` / `anecdotes_requirements` | Look up one requirement, or list requirements. |
+| `anecdotes_requirement` / `anecdotes_requirements` | Look up one requirement, or list requirements. Both report `parent_id` and `view_name`, so a requirement view is read through these rather than through a data source of its own. |
 | `anecdotes_framework_folder` / `anecdotes_framework_folders` | Look up one framework folder, or list them. |
 | `anecdotes_evidences` | List evidence (read-only). |
 | `anecdotes_role` / `anecdotes_roles` | Look up one role, or list roles (built-in and custom). |
+| `anecdotes_analysis_rule` / `anecdotes_analysis_rules` | Look up one analysis rule, or list them. |
+| `anecdotes_playbook_library` | List the trigger events a playbook step can subscribe to. |
+| `anecdotes_playbook_action_library` | List the actions a playbook step can perform. |
 
 Per-attribute documentation is generated for every resource and data source under
 [`docs/`](docs/).

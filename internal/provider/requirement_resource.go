@@ -134,20 +134,7 @@ Status values can be customized per organization, but common defaults include:
 }
 
 func (r *RequirementResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
-	if req.ProviderData == nil {
-		return
-	}
-
-	client, ok := req.ProviderData.(*client.AnecdotesClient)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *client.AnecdotesClient, got: %T. Please report this issue to the provider developers.", req.ProviderData),
-		)
-		return
-	}
-
-	r.client = client
+	r.client = configureClient(req.ProviderData, "Resource", &resp.Diagnostics)
 }
 
 func (r *RequirementResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -323,5 +310,5 @@ func (r *RequirementResource) setRequirementState(ctx context.Context, data *Req
 	// Set content (requirement_help → description, requirement_category → category)
 	data.Description = types.StringValue(requirement.RequirementHelp)
 	data.Category = types.StringValue(requirement.RequirementCategory)
-	data.Owners = ownersFromAPI(ctx, diags, data.Owners, requirement.RequirementOwners)
+	data.Owners = stringSetFromAPI(ctx, diags, data.Owners, requirement.RequirementOwners)
 }

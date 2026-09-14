@@ -25,18 +25,18 @@ var ownersEmailValidator = setvalidator.ValueStringsAre(
 	),
 )
 
-// ownersFromAPI computes the owners attribute value from the platform's
+// stringSetFromAPI computes a Terraform-owned set attribute from the platform's
 // response. An empty set and an unset attribute are distinct: the platform
-// reporting no owners only clears state that was already tracked (Terraform
-// owns this attribute), so `current` — the value already in state — decides
-// between an empty set and null when apiOwners is empty. Checking length
-// rather than whether apiOwners is nil also avoids depending on whether the
-// platform's JSON encoder omits the key or sends `[]` for "no owners".
-func ownersFromAPI(ctx context.Context, diags *diag.Diagnostics, current types.Set, apiOwners []string) types.Set {
-	if len(apiOwners) > 0 {
-		ownersSet, d := types.SetValueFrom(ctx, types.StringType, apiOwners)
+// reporting no values only clears state that was already tracked, so `current`,
+// the value already in state, decides between an empty set and null when
+// apiValues is empty. Checking length rather than whether apiValues is nil also
+// avoids depending on whether the platform's JSON encoder omits the key or
+// sends `[]` for "no values".
+func stringSetFromAPI(ctx context.Context, diags *diag.Diagnostics, current types.Set, apiValues []string) types.Set {
+	if len(apiValues) > 0 {
+		set, d := types.SetValueFrom(ctx, types.StringType, apiValues)
 		diags.Append(d...)
-		return ownersSet
+		return set
 	}
 	if !current.IsNull() {
 		return types.SetValueMust(types.StringType, []attr.Value{})

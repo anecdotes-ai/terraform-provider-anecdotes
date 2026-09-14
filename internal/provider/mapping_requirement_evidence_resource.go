@@ -76,20 +76,7 @@ section and is used for compliance monitoring.
 }
 
 func (r *MappingRequirementEvidenceResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
-	if req.ProviderData == nil {
-		return
-	}
-
-	c, ok := req.ProviderData.(*client.AnecdotesClient)
-	if !ok {
-		resp.Diagnostics.AddError(
-			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *client.AnecdotesClient, got: %T", req.ProviderData),
-		)
-		return
-	}
-
-	r.client = c
+	r.client = configureClient(req.ProviderData, "Resource", &resp.Diagnostics)
 }
 
 func (r *MappingRequirementEvidenceResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
