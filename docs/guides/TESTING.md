@@ -85,9 +85,8 @@ has passed.
   (singular lookups and plural list/filter). They are skipped automatically
   when `TF_ACC` is unset.
 - **Unit tests** (no tenant) cover plan-time enum validation, API error
-  classification and diagnostics, optional-pointer helpers, and two source-wide
-  audits: that resources surface API errors through the shared helpers, and
-  that Create, Read and Update populate the same state shape.
+  classification and diagnostics, optional-pointer helpers, and a source-wide
+  audit that resources surface API errors through the shared helpers.
 
 Reading `go test -cover` without `TF_ACC` understates the provider package
 heavily, because nearly all resource and data-source logic only executes under

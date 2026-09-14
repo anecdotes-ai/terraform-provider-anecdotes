@@ -121,6 +121,7 @@ func TestAccEvidencesDataSource_attributeSurface(t *testing.T) {
 					testCheckAnyAttrSet(addr, `^evidences\.\d+\.is_custom$`),
 					testCheckAnyAttrSet(addr, `^evidences\.\d+\.is_uar$`),
 					testCheckAnyAttrSet(addr, `^evidences\.\d+\.items_count$`),
+					testCheckAnyAttrSet(addr, `^evidences\.\d+\.alert_level$`),
 					testCheckAnyAttrSet(addr, `^evidences\.\d+\.processing_state$`),
 					testCheckAnyAttrSet(addr, `^evidences\.\d+\.entity_type$`),
 					testCheckAnyAttrSet(addr, `^evidences\.\d+\.parent_id$`),
