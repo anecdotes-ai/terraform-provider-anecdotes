@@ -92,6 +92,12 @@ the major version.
   ignores, and now say that their `permissions` is the resolved set the resource
   exposes as `effective_permissions`.
 
+### Fixed
+
+- Creating a control or a control category no longer records an empty id when
+  the API answers with a body that parses but carries no id. The control
+  reports the failure, and the category is recovered by name.
+
 ---
 
 ## [1.1.1] - 2026-08-30

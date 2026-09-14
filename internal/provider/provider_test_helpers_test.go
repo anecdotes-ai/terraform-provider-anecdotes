@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"regexp"
 	"strconv"
 	"testing"
 
@@ -49,6 +50,54 @@ func testAccPreCheck(t *testing.T) {
 	t.Helper()
 	if os.Getenv("ANECDOTES_API_KEY") == "" {
 		t.Fatal("ANECDOTES_API_KEY must be set for acceptance tests")
+	}
+}
+
+// testCheckAttrPresent asserts an attribute is present in state, whatever its value.
+// TestCheckResourceAttrSet and TestCheckResourceAttrWith both reject an empty value.
+func testCheckAttrPresent(resourceAddr, attr string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		rs, ok := s.RootModule().Resources[resourceAddr]
+		if !ok {
+			return fmt.Errorf("resource %s not found in state", resourceAddr)
+		}
+		if _, ok := rs.Primary.Attributes[attr]; !ok {
+			return fmt.Errorf("%s: attribute %q is not present in state", resourceAddr, attr)
+		}
+		return nil
+	}
+}
+
+// testCheckAnyAttrSet asserts at least one state key matching pattern carries a non-empty
+// value, so a list assertion does not depend on element order.
+func testCheckAnyAttrSet(resourceAddr, pattern string) resource.TestCheckFunc {
+	return anyAttrCheck(resourceAddr, pattern, true)
+}
+
+// testCheckAnyAttrPresent is testCheckAnyAttrSet requiring only the key, not a value.
+func testCheckAnyAttrPresent(resourceAddr, pattern string) resource.TestCheckFunc {
+	return anyAttrCheck(resourceAddr, pattern, false)
+}
+
+func anyAttrCheck(resourceAddr, pattern string, requireValue bool) resource.TestCheckFunc {
+	re := regexp.MustCompile(pattern)
+	return func(s *terraform.State) error {
+		rs, ok := s.RootModule().Resources[resourceAddr]
+		if !ok {
+			return fmt.Errorf("resource %s not found in state", resourceAddr)
+		}
+		for key, value := range rs.Primary.Attributes {
+			if !re.MatchString(key) {
+				continue
+			}
+			if !requireValue || value != "" {
+				return nil
+			}
+		}
+		if requireValue {
+			return fmt.Errorf("%s: no attribute matching %q carries a value", resourceAddr, pattern)
+		}
+		return fmt.Errorf("%s: no attribute matching %q is present in state", resourceAddr, pattern)
 	}
 }
 

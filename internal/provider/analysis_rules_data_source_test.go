@@ -205,3 +205,35 @@ func testCheckNoRowHasAttr(resourceAddr, listAttr, field, want string) resource.
 		return nil
 	}
 }
+
+// TestAccAnalysisRulesDataSource_attributeSurface asserts each mapped attribute is
+// populated on at least one listed rule, except account_scoping_list, which is set
+// only on rules scoped to included accounts and so is unreachable from a listing of
+// live rules.
+func TestAccAnalysisRulesDataSource_attributeSurface(t *testing.T) {
+	const addr = "data.anecdotes_analysis_rules.surface"
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: `data "anecdotes_analysis_rules" "surface" {}`,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testCheckAnyAttrSet(addr, `^rules\.\d+\.rule_name$`),
+					testCheckAnyAttrSet(addr, `^rules\.\d+\.rule_message$`),
+					testCheckAnyAttrSet(addr, `^rules\.\d+\.rule_type$`),
+					testCheckAnyAttrSet(addr, `^rules\.\d+\.rule_state$`),
+					testCheckAnyAttrSet(addr, `^rules\.\d+\.rule_query_type$`),
+					testCheckAnyAttrSet(addr, `^rules\.\d+\.rule_query_str$`),
+					testCheckAnyAttrSet(addr, `^rules\.\d+\.rule_is_archived$`),
+					testCheckAnyAttrSet(addr, `^rules\.\d+\.alert_level$`),
+					testCheckAnyAttrSet(addr, `^rules\.\d+\.library_rule_id$`),
+					testCheckAnyAttrSet(addr, `^rules\.\d+\.last_updated$`),
+					testCheckAnyAttrSet(addr, `^rules\.\d+\.last_updated_by$`),
+					testCheckAnyAttrSet(addr, `^rules\.\d+\.account_scoping_type$`),
+					testCheckAnyAttrPresent(addr, `^rules\.\d+\.rule_query_message$`),
+				),
+			},
+		},
+	})
+}

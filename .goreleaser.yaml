@@ -67,6 +67,9 @@ signs:
 release:
   # If you want to manually examine the release before its live, uncomment this line:
   # draft: true
+  # A tag carrying a prerelease identifier is published as a prerelease, so it is never
+  # served as the latest version.
+  prerelease: auto
   # Attach the registry manifest so the Terraform Registry can read the protocol version.
   extra_files:
     - glob: 'terraform-registry-manifest.json'
