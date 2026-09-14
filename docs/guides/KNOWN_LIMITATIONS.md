@@ -103,6 +103,12 @@ management with `terraform import`. This recovery does not apply to
 by-name lookup could adopt the wrong one. A create error on a view always
 surfaces as-is.
 
+For `anecdotes_role` the lookup considers only tenant-scoped custom roles. A
+custom role's key is derived from its name rather than copied from it, so a
+custom role may carry the same `name` as a built-in global role without
+colliding on a key — the lookup would otherwise be able to reach a
+platform-owned role, and a later destroy would try to delete it.
+
 ## Playbook steps cannot be added or removed
 
 A playbook's steps can be edited in place, but the platform has no way to add a
@@ -301,6 +307,29 @@ validated at plan time; values outside the set are rejected before any API call.
 Requirement categories are the categories Anecdotes defines, the same list the
 Requirements Hub offers. Requirements that do not fit one of them belong under
 `Custom Requirements`.
+
+## Role permissions are submitted but not stored
+
+`anecdotes_role.permissions` matches the API's create and update contract, but
+the platform accepts and echoes the list without persisting or enforcing it. A
+role's real, effective permissions are always the inheritance-expanded
+resolution of `extends`, exposed separately as `effective_permissions`. Two
+consequences:
+
+- `permissions` never reports drift, because there is nothing on the platform to
+  compare against.
+- `terraform import` cannot populate it, so it is null on an imported role.
+  A configuration that does not set `permissions` — the sensible one, given the
+  platform ignores it — imports and plans clean. A configuration that does set
+  it shows one diff after import, which applies harmlessly and then settles.
+
+Use `extends` to grant access; that is the part that actually governs it.
+
+`extends` itself cannot be set to an empty set. The platform substitutes
+`["basic_role"]` for an empty `extends` exactly as it does for an omitted one,
+so an explicit `[]` could never be honored; it is rejected while planning.
+Omit the attribute to get the default. `full_access_frameworks = []` is
+accepted, and means the same thing as omitting it: an unscoped role.
 
 ## SAML configuration display name must be unique
 

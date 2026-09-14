@@ -8,12 +8,14 @@ import (
 	"fmt"
 
 	"github.com/anecdotes-ai/terraform-provider-anecdotes/internal/client"
+	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -29,6 +31,13 @@ import (
 // resolved set almost never equals what was configured. Permissions therefore
 // always holds exactly what the user configured; the resolved set is exposed
 // separately as EffectivePermissions.
+//
+// It follows that Permissions is Optional rather than Required: since nothing
+// about it can be read back from the platform, ImportState cannot populate it
+// and it lands null after an import. Required would force every imported role
+// to carry a value the import could not produce, so the first plan after an
+// import would never be clean. Optional lets a config that omits it — the
+// sensible config, given the platform ignores it — import and plan clean.
 type RoleResourceModel struct {
 	RoleID               types.String `tfsdk:"role_id"`
 	Name                 types.String `tfsdk:"name"`
@@ -76,11 +85,14 @@ func (r *RoleResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 				Optional:            true,
 				Computed:            true,
 				MarkdownDescription: "The description of the role. If omitted, the platform auto-generates one.",
+				PlanModifiers: []planmodifier.String{
+					ResetOnConfigRemovalString(),
+				},
 			},
 			"permissions": schema.SetAttribute{
-				Required:            true,
+				Optional:            true,
 				ElementType:         types.StringType,
-				MarkdownDescription: "Permissions to submit for this role (e.g. `control:read`, `evidence:read`). **The platform accepts and echoes this list but does not persist or enforce it** — a role's real, effective permissions are always the inheritance-expanded resolution of `extends`. See `effective_permissions` for that resolved set. This attribute exists to match the API's create/update contract; it never reflects drift, since the platform has no way to report a change to it.",
+				MarkdownDescription: "Permissions to submit for this role (e.g. `control:read`, `evidence:read`). **The platform accepts and echoes this list but does not persist or enforce it** — a role's real, effective permissions are always the inheritance-expanded resolution of `extends`. See `effective_permissions` for that resolved set. This attribute exists to match the API's create/update contract; it never reflects drift, since the platform has no way to report a change to it. It is therefore also absent after an `import`: set it only if you want the value recorded in your configuration, and prefer `extends` to grant access.",
 			},
 			"effective_permissions": schema.SetAttribute{
 				Computed:            true,
@@ -91,13 +103,27 @@ func (r *RoleResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 				Optional:            true,
 				Computed:            true,
 				ElementType:         types.StringType,
-				MarkdownDescription: "Base role keys this role inherits permissions from. Defaults to `[\"basic_role\"]` if omitted.",
+				MarkdownDescription: "Base role keys this role inherits permissions from. Defaults to `[\"basic_role\"]` if omitted. Cannot be set to an empty set — the platform has no representation for a role that inherits nothing, and applies the default instead; omit the attribute to get that default.",
+				Validators: []validator.Set{
+					// An empty set is not the same as omitting the attribute:
+					// the platform substitutes ["basic_role"] either way, so an
+					// explicit [] could never be honored and would fail the
+					// apply with "provider produced inconsistent result" after
+					// the default came back. Reject it at plan time instead.
+					setvalidator.SizeAtLeast(1),
+				},
+				PlanModifiers: []planmodifier.Set{
+					ResetOnConfigRemovalSet(),
+				},
 			},
 			"full_access_frameworks": schema.ListAttribute{
 				Optional:            true,
 				Computed:            true,
 				ElementType:         types.StringType,
-				MarkdownDescription: "Framework IDs this role has full access to. Omit for an unscoped role.",
+				MarkdownDescription: "Framework IDs this role has full access to. Omit for an unscoped role; an empty list means the same thing.",
+				PlanModifiers: []planmodifier.List{
+					ResetOnConfigRemovalList(),
+				},
 			},
 			"created_at": schema.StringAttribute{
 				Computed:    true,
@@ -277,11 +303,24 @@ func mapRoleToState(ctx context.Context, role *client.Role, data *RoleResourceMo
 	diags.Append(setDiags...)
 	data.Extends = extends
 
-	if len(role.FullAccessFrameworks) > 0 {
+	switch {
+	case len(role.FullAccessFrameworks) > 0:
 		fullAccessFrameworks, listDiags := types.ListValueFrom(ctx, types.StringType, role.FullAccessFrameworks)
 		diags.Append(listDiags...)
 		data.FullAccessFrameworks = fullAccessFrameworks
-	} else {
+	case isKnownEmptyList(data.FullAccessFrameworks):
+		// The platform normalizes an empty full_access_frameworks to JSON null,
+		// so "[]" and null are the same unscoped role and it can never echo an
+		// empty list back. Overwriting a configured [] with null here would
+		// fail every apply of such a config with "provider produced
+		// inconsistent result after apply", so leave the configured value be.
+	default:
 		data.FullAccessFrameworks = types.ListNull(types.StringType)
 	}
+}
+
+// isKnownEmptyList reports whether v is a known (non-null, non-unknown) list
+// with no elements.
+func isKnownEmptyList(v types.List) bool {
+	return !v.IsNull() && !v.IsUnknown() && len(v.Elements()) == 0
 }

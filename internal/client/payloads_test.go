@@ -559,6 +559,10 @@ func TestCreateSamlConfiguration_SendsCreateFieldsAndResolvesProviderID(t *testi
 // and a genuine failure — callers that want best-effort delete semantics rely
 // on distinguishing the status code, so this pins that it comes through intact.
 func TestDeleteSamlConfiguration_502IsDistinguishableByStatusCode(t *testing.T) {
+	// 502 is retried, so without this the production 2s/4s/6s backoff makes
+	// this single test most of the package's runtime.
+	shortenRetryBackoff(t)
+
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/apikey/exchange") {
 			_, _ = w.Write([]byte("test-token"))
@@ -614,4 +618,68 @@ func keysOf(m map[string]interface{}) []string {
 		keys = append(keys, k)
 	}
 	return keys
+}
+
+// CreateRole recovers from an ambiguous 5xx by resolving the role by name,
+// because the key is server-generated and a blind retry would risk a duplicate.
+// That resolution must never reach a built-in global role. ListRoles returns
+// global and custom roles in one array, and a custom role's key is derived
+// rather than copied from its name, so a custom role named "Viewer" gets its
+// own key and never collides with the built-in viewer_role — no 409 stops the
+// name match. Adopting the global role would put a platform-owned role under
+// Terraform management, and a later destroy would try to delete it.
+func TestCreateRole_5xxRecoveryNeverAdoptsGlobalRole(t *testing.T) {
+	shortenRetryBackoff(t)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/apikey/exchange") {
+			_, _ = w.Write([]byte("test-token"))
+			return
+		}
+		if r.Method == http.MethodPost {
+			w.WriteHeader(http.StatusBadGateway)
+			_, _ = w.Write([]byte("error code: 502"))
+			return
+		}
+		// The tenant holds a built-in global "Viewer" and no custom role by
+		// that name — the create genuinely produced nothing.
+		_, _ = w.Write([]byte(`[{"key":"viewer_role","name":"Viewer","description":"Built-in","permissions":["control:read"],"attributes":{"is_global_role":"true"},"extends":[],"created_at":"t1","updated_at":"t2"}]`))
+	}))
+	defer srv.Close()
+
+	role, err := newTestClient(t, srv).CreateRole(context.Background(), &RoleCreateRequest{Name: "Viewer"})
+	if err == nil {
+		t.Fatalf("expected the 502 to surface, but a role was adopted: key=%q", role.Key)
+	}
+	if role != nil {
+		t.Errorf("expected no role, got key=%q", role.Key)
+	}
+}
+
+// The same recovery must still work for a genuine custom role, so the guard
+// above cannot simply be "never adopt anything".
+func TestCreateRole_5xxRecoveryAdoptsOwnCustomRole(t *testing.T) {
+	shortenRetryBackoff(t)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/apikey/exchange") {
+			_, _ = w.Write([]byte("test-token"))
+			return
+		}
+		if r.Method == http.MethodPost {
+			w.WriteHeader(http.StatusBadGateway)
+			_, _ = w.Write([]byte("error code: 502"))
+			return
+		}
+		_, _ = w.Write([]byte(`[{"key":"viewer_role","name":"Viewer","description":"Built-in","attributes":{"is_global_role":"true"},"created_at":"t1","updated_at":"t2"},{"key":"cst_viewer","name":"Viewer","description":"Mine","permissions":["control:read"],"attributes":{"tenant":"cst_00000000"},"extends":["basic_role"],"created_at":"t1","updated_at":"t2"}]`))
+	}))
+	defer srv.Close()
+
+	role, err := newTestClient(t, srv).CreateRole(context.Background(), &RoleCreateRequest{Name: "Viewer"})
+	if err != nil {
+		t.Fatalf("expected the custom role to be adopted: %v", err)
+	}
+	if role.Key != "cst_viewer" {
+		t.Errorf("expected the tenant's own custom role, got key=%q", role.Key)
+	}
 }

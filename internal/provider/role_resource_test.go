@@ -6,6 +6,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"testing"
 
 	"github.com/anecdotes-ai/terraform-provider-anecdotes/internal/client"
@@ -114,6 +115,77 @@ func TestMapRoleToState_PreservesCreatedAtAcrossUpdate(t *testing.T) {
 	}
 }
 
+// A config carrying `full_access_frameworks = []` must survive an apply. The
+// platform normalizes an empty list to JSON null and can never echo [] back, so
+// writing null into state here would fail the apply with "provider produced
+// inconsistent result after apply" against a plan holding [].
+func TestMapRoleToState_PreservesConfiguredEmptyFullAccessFrameworks(t *testing.T) {
+	ctx := context.Background()
+	emptyList, d := types.ListValueFrom(ctx, types.StringType, []string{})
+	if d.HasError() {
+		t.Fatalf("build empty list: %v", d)
+	}
+	data := &RoleResourceModel{FullAccessFrameworks: emptyList}
+
+	// Unscoped role: the platform reports null, not [].
+	role := &client.Role{Key: "cst_00000000_demorole", Name: "DemoRole", FullAccessFrameworks: nil}
+
+	var diags diag.Diagnostics
+	mapRoleToState(ctx, role, data, &diags)
+	if diags.HasError() {
+		t.Fatalf("mapRoleToState: %v", diags)
+	}
+
+	if data.FullAccessFrameworks.IsNull() {
+		t.Fatal("a configured empty list must not be replaced by null")
+	}
+	if n := len(data.FullAccessFrameworks.Elements()); n != 0 {
+		t.Errorf("expected the empty list to be preserved, got %d elements", n)
+	}
+}
+
+// The converse: when the attribute was never configured, an unscoped role still
+// has to land as null rather than an invented empty list.
+func TestMapRoleToState_UnsetFullAccessFrameworksStaysNull(t *testing.T) {
+	ctx := context.Background()
+	data := &RoleResourceModel{FullAccessFrameworks: types.ListNull(types.StringType)}
+
+	role := &client.Role{Key: "cst_00000000_demorole", Name: "DemoRole", FullAccessFrameworks: nil}
+
+	var diags diag.Diagnostics
+	mapRoleToState(ctx, role, data, &diags)
+	if diags.HasError() {
+		t.Fatalf("mapRoleToState: %v", diags)
+	}
+
+	if !data.FullAccessFrameworks.IsNull() {
+		t.Errorf("expected null, got %v", data.FullAccessFrameworks)
+	}
+}
+
+// Drift must still be reported: a role that had frameworks and no longer does
+// comes back as null even though state held a value.
+func TestMapRoleToState_ClearedFullAccessFrameworksBecomesNull(t *testing.T) {
+	ctx := context.Background()
+	prior, d := types.ListValueFrom(ctx, types.StringType, []string{"790498536_cb1a5c3de0"})
+	if d.HasError() {
+		t.Fatalf("build list: %v", d)
+	}
+	data := &RoleResourceModel{FullAccessFrameworks: prior}
+
+	role := &client.Role{Key: "cst_00000000_demorole", Name: "DemoRole", FullAccessFrameworks: nil}
+
+	var diags diag.Diagnostics
+	mapRoleToState(ctx, role, data, &diags)
+	if diags.HasError() {
+		t.Fatalf("mapRoleToState: %v", diags)
+	}
+
+	if !data.FullAccessFrameworks.IsNull() {
+		t.Errorf("expected the cleared value to surface as null, got %v", data.FullAccessFrameworks)
+	}
+}
+
 // TestAccRoleResource_create covers the simplest case: no extends, no
 // permissions.
 func TestAccRoleResource_create(t *testing.T) {
@@ -197,6 +269,124 @@ resource "anecdotes_role" "test" {
 					resource.TestCheckResourceAttr("anecdotes_role.test", "description", "Updated description"),
 					resource.TestCheckResourceAttr("anecdotes_role.test", "name", name),
 				),
+			},
+		},
+	})
+}
+
+// An empty full_access_frameworks must apply cleanly. The platform normalizes
+// [] to null and can never echo it back, so before the mapping fix this failed
+// the apply outright with "provider produced inconsistent result after apply".
+func TestAccRoleResource_emptyFullAccessFrameworks(t *testing.T) {
+	name := randomName("role-faf")
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: fmt.Sprintf(`
+resource "anecdotes_role" "test" {
+  name                   = %q
+  description            = "Empty full_access_frameworks"
+  full_access_frameworks = []
+}`, name),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("anecdotes_role.test", "name", name),
+					resource.TestCheckResourceAttr("anecdotes_role.test", "full_access_frameworks.#", "0"),
+				),
+			},
+		},
+	})
+}
+
+// extends = [] is rejected at plan time rather than failing the apply: the
+// platform substitutes ["basic_role"] for an empty extends exactly as it does
+// for an omitted one, so the configured value could never be honored.
+func TestAccRoleResource_emptyExtendsRejected(t *testing.T) {
+	name := randomName("role-ext0")
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: fmt.Sprintf(`
+resource "anecdotes_role" "test" {
+  name        = %q
+  description = "Empty extends"
+  extends     = []
+}`, name),
+				ExpectError: regexp.MustCompile(`(?s)extends.*at least 1`),
+			},
+		},
+	})
+}
+
+// Removing an Optional+Computed attribute from config must actually remove it.
+// Without the reset plan modifier the prior value is carried forward into the
+// plan and re-sent on the full-object PUT, so Terraform reports "No changes"
+// and the role silently keeps the inheritance the user just deleted.
+func TestAccRoleResource_removingExtendsResetsToDefault(t *testing.T) {
+	name := randomName("role-extdel")
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: fmt.Sprintf(`
+resource "anecdotes_role" "test" {
+  name        = %q
+  description = "Extends removal"
+  extends     = ["viewer_role"]
+}`, name),
+				Check: resource.TestCheckTypeSetElemAttr("anecdotes_role.test", "extends.*", "viewer_role"),
+			},
+			{
+				Config: fmt.Sprintf(`
+resource "anecdotes_role" "test" {
+  name        = %q
+  description = "Extends removal"
+}`, name),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					// Back to the platform default, not the removed value.
+					resource.TestCheckTypeSetElemAttr("anecdotes_role.test", "extends.*", "basic_role"),
+					resource.TestCheckResourceAttr("anecdotes_role.test", "extends.#", "1"),
+				),
+			},
+		},
+	})
+}
+
+// A role imported from a config that does not set permissions must plan clean.
+// permissions is deliberately never read back from the platform, so it lands
+// null on import; while it was Required that guaranteed a permanent diff.
+func TestAccRoleResource_importPlansClean(t *testing.T) {
+	name := randomName("role-impclean")
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: fmt.Sprintf(`
+resource "anecdotes_role" "test" {
+  name        = %q
+  description = "Import clean-plan test"
+}`, name),
+			},
+			{
+				ResourceName:                         "anecdotes_role.test",
+				ImportState:                          true,
+				ImportStateVerify:                    true,
+				ImportStateVerifyIdentifierAttribute: "role_id",
+				ImportStateIdFunc:                    importIDFromAttr("anecdotes_role.test", "role_id"),
+			},
+			{
+				Config: fmt.Sprintf(`
+resource "anecdotes_role" "test" {
+  name        = %q
+  description = "Import clean-plan test"
+}`, name),
+				PlanOnly:           true,
+				ExpectNonEmptyPlan: false,
 			},
 		},
 	})

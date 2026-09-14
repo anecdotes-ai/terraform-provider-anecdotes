@@ -607,6 +607,17 @@ type Role struct {
 	FullAccessFrameworks []string `json:"full_access_frameworks"`
 }
 
+// IsCustom reports whether this is a tenant-scoped custom role, as opposed to
+// a built-in global role. A custom role carries {"tenant": "<tenant_id>"} in
+// its attributes; a global role carries {"is_global_role": "true"} instead.
+// Only custom roles can be created, updated or deleted through the API, so
+// this is the guard for anything that resolves a role out of the combined
+// global+custom list ListRoles returns.
+func (r Role) IsCustom() bool {
+	_, ok := r.Attributes["tenant"]
+	return ok
+}
+
 // RoleCreateRequest is the create-role body. A client-supplied Key is ignored
 // by the API. Extends defaults server-side to ["basic_role"] when omitted.
 type RoleCreateRequest struct {

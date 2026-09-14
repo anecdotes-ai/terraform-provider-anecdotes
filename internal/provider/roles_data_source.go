@@ -49,7 +49,7 @@ var roleItemAttrTypes = map[string]attr.Type{
 func (d *RolesDataSource) Schema(ctx context.Context, req datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description:         "Lists every role visible to the tenant — built-in global roles plus tenant-specific custom roles.",
-		MarkdownDescription: "Lists every role visible to the tenant — built-in global roles plus tenant-specific custom roles. Useful for discovering valid `extends`/`permissions` values for `anecdotes_role` without hardcoding them.",
+		MarkdownDescription: "Lists every role visible to the tenant — built-in global roles plus tenant-specific custom roles. Useful for discovering valid `extends` values for `anecdotes_role` without hardcoding them. Note that this data source's `permissions` is each role's resolved, effective permission set, the same value `anecdotes_role` exposes as `effective_permissions` — not the submitted list that resource's `permissions` holds.",
 		Attributes: map[string]schema.Attribute{
 			"name_contains": schema.StringAttribute{
 				Description: "Filter roles whose name contains this substring (case-insensitive).",

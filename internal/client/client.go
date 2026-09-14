@@ -1402,8 +1402,16 @@ func (c *AnecdotesClient) GetRole(ctx context.Context, key string) (*Role, error
 	return nil, fmt.Errorf("role not found: %s: %w", key, ErrNotFound)
 }
 
-// getRoleByName finds a role by its name. Used to resolve a role this client
-// created when the create response cannot be used directly.
+// getRoleByName finds a tenant-scoped custom role by its name. Used to resolve
+// a role this client created when the create response cannot be used directly.
+//
+// Built-in global roles are deliberately skipped. ListRoles returns global and
+// custom roles in one array, and a custom role's key is derived from its name
+// rather than copied from it, so a custom role named "Viewer" gets a key of its
+// own and never collides with the built-in viewer_role — there is no conflict
+// to stop a name match from reaching across. Without this filter an ambiguous
+// 5xx on create would adopt a platform-owned role into Terraform state, and a
+// later destroy would try to delete it.
 func (c *AnecdotesClient) getRoleByName(ctx context.Context, name string) (*Role, error) {
 	roles, err := c.ListRoles(ctx)
 	if err != nil {
@@ -1411,7 +1419,7 @@ func (c *AnecdotesClient) getRoleByName(ctx context.Context, name string) (*Role
 	}
 
 	for _, r := range roles {
-		if r.Name == name {
+		if r.Name == name && r.IsCustom() {
 			return &r, nil
 		}
 	}

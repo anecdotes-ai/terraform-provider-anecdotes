@@ -22,8 +22,13 @@ resource "anecdotes_role" "auditor_readonly" {
   name        = "Auditor Read-Only"
   description = "Read-only access to a limited set of frameworks"
 
-  extends     = [data.anecdotes_role.viewer.role_id]
-  permissions = []
+  # extends is what actually governs access. The platform resolves it into the
+  # role's effective permissions, readable as effective_permissions.
+  extends = [data.anecdotes_role.viewer.role_id]
+
+  # permissions is omitted on purpose: the platform accepts the list but never
+  # persists or enforces it, and leaving it unset keeps an imported role
+  # planning clean.
 
   # Omit full_access_frameworks entirely for an unscoped role.
 }
@@ -35,13 +40,13 @@ resource "anecdotes_role" "auditor_readonly" {
 ### Required
 
 - `name` (String) The name of the role.
-- `permissions` (Set of String) Permissions to submit for this role (e.g. `control:read`, `evidence:read`). **The platform accepts and echoes this list but does not persist or enforce it** — a role's real, effective permissions are always the inheritance-expanded resolution of `extends`. See `effective_permissions` for that resolved set. This attribute exists to match the API's create/update contract; it never reflects drift, since the platform has no way to report a change to it.
 
 ### Optional
 
 - `description` (String) The description of the role. If omitted, the platform auto-generates one.
-- `extends` (Set of String) Base role keys this role inherits permissions from. Defaults to `["basic_role"]` if omitted.
-- `full_access_frameworks` (List of String) Framework IDs this role has full access to. Omit for an unscoped role.
+- `extends` (Set of String) Base role keys this role inherits permissions from. Defaults to `["basic_role"]` if omitted. Cannot be set to an empty set — the platform has no representation for a role that inherits nothing, and applies the default instead; omit the attribute to get that default.
+- `full_access_frameworks` (List of String) Framework IDs this role has full access to. Omit for an unscoped role; an empty list means the same thing.
+- `permissions` (Set of String) Permissions to submit for this role (e.g. `control:read`, `evidence:read`). **The platform accepts and echoes this list but does not persist or enforce it** — a role's real, effective permissions are always the inheritance-expanded resolution of `extends`. See `effective_permissions` for that resolved set. This attribute exists to match the API's create/update contract; it never reflects drift, since the platform has no way to report a change to it. It is therefore also absent after an `import`: set it only if you want the value recorded in your configuration, and prefer `extends` to grant access.
 
 ### Read-Only
 

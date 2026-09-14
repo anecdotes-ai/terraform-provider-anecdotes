@@ -91,10 +91,11 @@ func stringsFromSet(ctx context.Context, set types.Set, diags *diag.Diagnostics)
 }
 
 // isCustomRole reports whether a role is a tenant-scoped custom role (as
-// opposed to a built-in global role) based on its attributes map.
+// opposed to a built-in global role). The rule itself lives on client.Role so
+// the client package can apply it too; this stays as the provider-side spelling
+// the data sources already read.
 func isCustomRole(role client.Role) bool {
-	_, ok := role.Attributes["tenant"]
-	return ok
+	return role.IsCustom()
 }
 
 // stringOrNull converts an API string into a Terraform value, mapping "" to

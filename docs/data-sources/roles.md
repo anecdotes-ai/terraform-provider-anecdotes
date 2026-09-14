@@ -3,12 +3,12 @@
 page_title: "anecdotes_roles Data Source - anecdotes"
 subcategory: ""
 description: |-
-  Lists every role visible to the tenant — built-in global roles plus tenant-specific custom roles. Useful for discovering valid extends/permissions values for anecdotes_role without hardcoding them.
+  Lists every role visible to the tenant — built-in global roles plus tenant-specific custom roles. Useful for discovering valid extends values for anecdotes_role without hardcoding them. Note that this data source's permissions is each role's resolved, effective permission set, the same value anecdotes_role exposes as effective_permissions — not the submitted list that resource's permissions holds.
 ---
 
 # anecdotes_roles (Data Source)
 
-Lists every role visible to the tenant — built-in global roles plus tenant-specific custom roles. Useful for discovering valid `extends`/`permissions` values for `anecdotes_role` without hardcoding them.
+Lists every role visible to the tenant — built-in global roles plus tenant-specific custom roles. Useful for discovering valid `extends` values for `anecdotes_role` without hardcoding them. Note that this data source's `permissions` is each role's resolved, effective permission set, the same value `anecdotes_role` exposes as `effective_permissions` — not the submitted list that resource's `permissions` holds.
 
 ## Example Usage
 

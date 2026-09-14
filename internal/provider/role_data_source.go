@@ -40,7 +40,7 @@ func (d *RoleDataSource) Metadata(ctx context.Context, req datasource.MetadataRe
 
 func (d *RoleDataSource) Schema(ctx context.Context, req datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		MarkdownDescription: "Looks up an existing role (built-in or custom) by its `role_id` (key) — useful for referencing a base role's key in `anecdotes_role`'s `extends`, or discovering valid `permissions` values, without hardcoding them.",
+		MarkdownDescription: "Looks up an existing role (built-in or custom) by its `role_id` (key) — useful for referencing a base role's key in `anecdotes_role`'s `extends` without hardcoding it. Note that this data source's `permissions` is the role's resolved, effective permission set, the same value `anecdotes_role` exposes as `effective_permissions` — not the submitted list that resource's `permissions` holds.",
 		Attributes: map[string]schema.Attribute{
 			"role_id": schema.StringAttribute{
 				Required:    true,

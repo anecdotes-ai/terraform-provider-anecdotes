@@ -11,6 +11,7 @@ resource "anecdotes_role" "anecdotes_auditor_readonly" {
   name        = "Auditor Read-Only"
   description = "Read-only access to a limited set of frameworks"
 
-  extends     = [data.anecdotes_role.viewer.role_id]
-  permissions = []
+  # extends is what actually governs access; permissions is accepted by the
+  # platform but never persisted or enforced, so it is left unset.
+  extends = [data.anecdotes_role.viewer.role_id]
 }

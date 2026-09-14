@@ -60,6 +60,35 @@ the major version.
     role visible to the tenant (built-in global roles plus tenant-specific
     custom roles).
 
+### Fixed
+
+- `anecdotes_role` create recovery no longer resolves across built-in global
+  roles. A custom role's key is derived from its name rather than copied from
+  it, so a custom role can share a `name` with a global role without colliding
+  on a key; an ambiguous 5xx on create could therefore adopt a platform-owned
+  role into state, and a later destroy would try to delete it.
+- `anecdotes_role.full_access_frameworks = []` no longer fails every apply. The
+  platform normalizes an empty list to null and cannot echo `[]` back, so the
+  configured value was being overwritten with null and reported as an
+  inconsistent result.
+- `anecdotes_role.extends = []` is now rejected while planning. The platform
+  substitutes `["basic_role"]` for an empty `extends` exactly as it does for an
+  omitted one, so the configured value could never be honored and the apply
+  failed as an inconsistent result. Omit the attribute to get the default.
+- Removing `anecdotes_role`'s `description`, `extends` or
+  `full_access_frameworks` from configuration now actually resets it. These are
+  Optional+Computed, so the prior value was carried into the plan and re-sent on
+  the full-object PUT: deleting `extends` reported "No changes" and silently
+  kept the inheritance that had just been removed.
+- `anecdotes_role.permissions` is now Optional rather than Required. It is never
+  read back from the platform, so `terraform import` cannot populate it and a
+  configuration was previously forced to carry a value the import could not
+  produce — the first plan after an import was never clean.
+- The `anecdotes_role` / `anecdotes_roles` data source descriptions no longer
+  recommend using them to discover `permissions` values, which the platform
+  ignores, and now say that their `permissions` is the resolved set the resource
+  exposes as `effective_permissions`.
+
 ---
 
 ## [1.1.1] - 2026-08-30

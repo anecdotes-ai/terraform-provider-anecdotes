@@ -3,12 +3,12 @@
 page_title: "anecdotes_role Data Source - anecdotes"
 subcategory: ""
 description: |-
-  Looks up an existing role (built-in or custom) by its role_id (key) — useful for referencing a base role's key in anecdotes_role's extends, or discovering valid permissions values, without hardcoding them.
+  Looks up an existing role (built-in or custom) by its role_id (key) — useful for referencing a base role's key in anecdotes_role's extends without hardcoding it. Note that this data source's permissions is the role's resolved, effective permission set, the same value anecdotes_role exposes as effective_permissions — not the submitted list that resource's permissions holds.
 ---
 
 # anecdotes_role (Data Source)
 
-Looks up an existing role (built-in or custom) by its `role_id` (key) — useful for referencing a base role's key in `anecdotes_role`'s `extends`, or discovering valid `permissions` values, without hardcoding them.
+Looks up an existing role (built-in or custom) by its `role_id` (key) — useful for referencing a base role's key in `anecdotes_role`'s `extends` without hardcoding it. Note that this data source's `permissions` is the role's resolved, effective permission set, the same value `anecdotes_role` exposes as `effective_permissions` — not the submitted list that resource's `permissions` holds.
 
 ## Example Usage
 
