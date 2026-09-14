@@ -4,12 +4,9 @@
 package provider
 
 import (
-	"fmt"
-	"strconv"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
-	"github.com/hashicorp/terraform-plugin-testing/terraform"
 )
 
 func TestAccEvidencesDataSource_basic(t *testing.T) {
@@ -70,32 +67,10 @@ func TestAccEvidencesDataSource_reportsServiceInstanceIDs(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: `data "anecdotes_evidences" "all" {}`,
-				Check:  testCheckSomeEvidenceReportsInstanceIDs("data.anecdotes_evidences.all"),
+				Check:  testCheckAnyAttrSet("data.anecdotes_evidences.all", `^evidences\.\d+\.service_instance_ids\.\d+$`),
 			},
 		},
 	})
-}
-
-// testCheckSomeEvidenceReportsInstanceIDs asserts at least one evidence reports
-// a non-empty service_instance_ids.
-func testCheckSomeEvidenceReportsInstanceIDs(resourceAddr string) resource.TestCheckFunc {
-	return func(s *terraform.State) error {
-		rs, ok := s.RootModule().Resources[resourceAddr]
-		if !ok {
-			return fmt.Errorf("resource %s not found in state", resourceAddr)
-		}
-		count, err := strconv.Atoi(rs.Primary.Attributes["evidences.#"])
-		if err != nil {
-			return fmt.Errorf("reading evidences.# on %s: %w", resourceAddr, err)
-		}
-		for i := 0; i < count; i++ {
-			n := rs.Primary.Attributes[fmt.Sprintf("evidences.%d.service_instance_ids.#", i)]
-			if n != "" && n != "0" {
-				return nil
-			}
-		}
-		return fmt.Errorf("none of the %d evidences reported a service_instance_ids entry", count)
-	}
 }
 
 // TestAccEvidencesDataSource_attributeSurface asserts each mapped attribute is populated

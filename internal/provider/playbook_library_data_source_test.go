@@ -149,6 +149,7 @@ func TestAccPlaybookLibraryDataSource_attributeSurface(t *testing.T) {
 					testCheckAnyAttrSet(addr, `^events\.\d+\.event_fields\.\d+\.field_id$`),
 					testCheckAnyAttrSet(addr, `^events\.\d+\.event_fields\.\d+\.display_name$`),
 					testCheckAnyAttrSet(addr, `^events\.\d+\.event_fields\.\d+\.type$`),
+					testCheckAnyAttrSet(addr, `^events\.\d+\.event_fields\.\d+\.description$`),
 					testCheckAnyAttrSet(addr, `^events\.\d+\.event_fields\.\d+\.aql_operator$`),
 					testCheckAnyAttrSet(addr, `^events\.\d+\.event_fields\.\d+\.is_filterable$`),
 					testCheckAnyAttrPresent(addr, `^events\.\d+\.event_fields\.\d+\.values\.#$`),
@@ -170,6 +171,7 @@ func TestAccPlaybookActionLibraryDataSource_attributeSurface(t *testing.T) {
 				Config: `data "anecdotes_playbook_action_library" "surface" {}`,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					testCheckAnyAttrSet(addr, `^actions\.\d+\.action_text$`),
+					testCheckAnyAttrSet(addr, `^actions\.\d+\.description$`),
 					testCheckAnyAttrSet(addr, `^actions\.\d+\.coming_soon$`),
 					testCheckAnyAttrPresent(addr, `^actions\.\d+\.action_category$`),
 					testCheckAnyAttrPresent(addr, `^actions\.\d+\.action_name$`),

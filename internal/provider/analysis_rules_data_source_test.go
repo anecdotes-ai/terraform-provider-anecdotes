@@ -207,9 +207,9 @@ func testCheckNoRowHasAttr(resourceAddr, listAttr, field, want string) resource.
 }
 
 // TestAccAnalysisRulesDataSource_attributeSurface asserts each mapped attribute is
-// populated on at least one listed rule. account_scoping_list is set only on rules
-// scoped to included accounts, which TestAccAnalysisRule_scopedToServiceInstances
-// covers.
+// populated on at least one listed rule, except account_scoping_list, which is set
+// only on rules scoped to included accounts and so is unreachable from a listing of
+// live rules.
 func TestAccAnalysisRulesDataSource_attributeSurface(t *testing.T) {
 	const addr = "data.anecdotes_analysis_rules.surface"
 	resource.Test(t, resource.TestCase{
