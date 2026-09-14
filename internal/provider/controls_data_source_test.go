@@ -62,3 +62,36 @@ data "anecdotes_controls" "test" {
 		},
 	})
 }
+
+// TestAccControlsDataSource_attributeSurface asserts every attribute the plural
+// controls data source maps onto each listed control.
+func TestAccControlsDataSource_attributeSurface(t *testing.T) {
+	fw := randomName("fw-ctrls-surface")
+	cat := randomName("cat-ctrls-surface")
+	ctrl := randomName("ctrl-surface")
+	const addr = "data.anecdotes_controls.surface"
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccControlConfig(fw, cat, ctrl) + `
+data "anecdotes_controls" "surface" {
+  framework_id = anecdotes_framework.test.framework_id
+  depends_on   = [anecdotes_control.test]
+}`,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testCheckTotalCountGreaterThan(addr, 0),
+					testCheckAnyAttrSet(addr, `^controls\.\d+\.framework_id$`),
+					testCheckAnyAttrSet(addr, `^controls\.\d+\.category_id$`),
+					testCheckAnyAttrSet(addr, `^controls\.\d+\.status$`),
+					// Empty on a control created without them.
+					testCheckAnyAttrPresent(addr, `^controls\.\d+\.category$`),
+					testCheckAnyAttrPresent(addr, `^controls\.\d+\.description$`),
+					testCheckAnyAttrPresent(addr, `^controls\.\d+\.owners\.#$`),
+					testCheckAnyAttrPresent(addr, `^controls\.\d+\.tags\.#$`),
+				),
+			},
+		},
+	})
+}

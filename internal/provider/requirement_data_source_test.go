@@ -33,3 +33,28 @@ data "anecdotes_requirement" "test" {
 		},
 	})
 }
+
+// TestAccRequirementDataSource_attributeSurface asserts every attribute the singular
+// requirement data source maps.
+func TestAccRequirementDataSource_attributeSurface(t *testing.T) {
+	name := randomName("req-ds-surface")
+	const addr = "data.anecdotes_requirement.surface"
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccRequirementConfig(name) + `
+data "anecdotes_requirement" "surface" {
+  requirement_id = anecdotes_requirement.test.requirement_id
+}`,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttrSet(addr, "is_custom"),
+					// A standalone requirement has no status until it is linked.
+					testCheckAttrPresent(addr, "status"),
+					testCheckAttrPresent(addr, "status_name"),
+				),
+			},
+		},
+	})
+}

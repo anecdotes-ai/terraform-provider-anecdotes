@@ -81,3 +81,37 @@ data "anecdotes_requirements" "test" {
 		},
 	})
 }
+
+// TestAccRequirementsDataSource_attributeSurface asserts every attribute the plural
+// requirements data source maps onto each listed requirement.
+func TestAccRequirementsDataSource_attributeSurface(t *testing.T) {
+	name := randomName("req-surface")
+	const addr = "data.anecdotes_requirements.surface"
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccRequirementConfig(name) + `
+data "anecdotes_requirements" "surface" {
+  include_unlinked = true
+  depends_on       = [anecdotes_requirement.test]
+}`,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testCheckTotalCountGreaterThan(addr, 0),
+					resource.TestCheckResourceAttrSet(addr, "requirements.0.requirement_id"),
+					resource.TestCheckResourceAttrSet(addr, "requirements.0.name"),
+					resource.TestCheckResourceAttrSet(addr, "requirements.0.category"),
+					resource.TestCheckResourceAttrSet(addr, "requirements.0.is_custom"),
+					// Empty on requirements that carry no description, are unlinked, or
+					// have no status yet.
+					testCheckAttrPresent(addr, "requirements.0.description"),
+					testCheckAttrPresent(addr, "requirements.0.parent_id"),
+					testCheckAttrPresent(addr, "requirements.0.status"),
+					testCheckAttrPresent(addr, "requirements.0.status_name"),
+					testCheckAttrPresent(addr, "requirements.0.view_name"),
+				),
+			},
+		},
+	})
+}

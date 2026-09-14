@@ -40,3 +40,29 @@ func TestAccControlCategoriesDataSource_filterByName(t *testing.T) {
 		},
 	})
 }
+
+// TestAccControlCategoriesDataSource_attributeSurface asserts every attribute the
+// plural categories data source maps onto each listed category.
+func TestAccControlCategoriesDataSource_attributeSurface(t *testing.T) {
+	fw := randomName("fw-cats-surface")
+	cat := randomName("cat-surface")
+	const addr = "data.anecdotes_control_categories.surface"
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccControlCategoryConfig(fw, cat) + `
+data "anecdotes_control_categories" "surface" {
+  framework_id = anecdotes_framework.test.framework_id
+  depends_on   = [anecdotes_control_category.test]
+}`,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testCheckAnyAttrSet(addr, `^categories\.\d+\.category_id$`),
+					testCheckAnyAttrSet(addr, `^categories\.\d+\.category_name$`),
+					testCheckAnyAttrSet(addr, `^categories\.\d+\.framework_id$`),
+				),
+			},
+		},
+	})
+}

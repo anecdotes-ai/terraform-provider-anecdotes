@@ -26,3 +26,25 @@ func TestAccFrameworkFoldersDataSource_basic(t *testing.T) {
 		},
 	})
 }
+
+// TestAccFrameworkFoldersDataSource_attributeSurface asserts the folders data source
+// reports the frameworks each folder holds.
+func TestAccFrameworkFoldersDataSource_attributeSurface(t *testing.T) {
+	name := randomName("fw-folders-surface")
+	const addr = "data.anecdotes_framework_folders.surface"
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccFrameworkConfig(name) + `
+data "anecdotes_framework_folders" "surface" {
+  depends_on = [anecdotes_framework.test]
+}`,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testCheckAnyAttrSet(addr, `^folders\.\d+\.frameworks_list\.#$`),
+				),
+			},
+		},
+	})
+}

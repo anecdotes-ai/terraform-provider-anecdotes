@@ -205,3 +205,21 @@ func testCheckNoRowHasAttr(resourceAddr, listAttr, field, want string) resource.
 		return nil
 	}
 }
+
+// TestAccAnalysisRulesDataSource_attributeSurface asserts the rule query message is
+// mapped onto each listed rule. It is empty for rules whose query carries no message.
+func TestAccAnalysisRulesDataSource_attributeSurface(t *testing.T) {
+	const addr = "data.anecdotes_analysis_rules.surface"
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: `data "anecdotes_analysis_rules" "surface" {}`,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testCheckAnyAttrPresent(addr, `^rules\.\d+\.rule_query_message$`),
+				),
+			},
+		},
+	})
+}

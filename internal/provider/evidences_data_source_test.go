@@ -97,3 +97,40 @@ func testCheckSomeEvidenceReportsInstanceIDs(resourceAddr string) resource.TestC
 		return fmt.Errorf("none of the %d evidences reported a service_instance_ids entry", count)
 	}
 }
+
+// TestAccEvidencesDataSource_attributeSurface asserts every attribute the plural
+// evidences data source maps onto each listed evidence.
+func TestAccEvidencesDataSource_attributeSurface(t *testing.T) {
+	const addr = "data.anecdotes_evidences.surface"
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: `data "anecdotes_evidences" "surface" {}`,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testCheckTotalCountGreaterThan(addr, 0),
+					resource.TestCheckResourceAttrSet(addr, "evidences.0.evidence_id"),
+					resource.TestCheckResourceAttrSet(addr, "evidences.0.evidence_instance_id"),
+					resource.TestCheckResourceAttrSet(addr, "evidences.0.name"),
+					resource.TestCheckResourceAttrSet(addr, "evidences.0.display_name"),
+					resource.TestCheckResourceAttrSet(addr, "evidences.0.evidence_type"),
+					resource.TestCheckResourceAttrSet(addr, "evidences.0.service_id"),
+					resource.TestCheckResourceAttrSet(addr, "evidences.0.service_display_name"),
+					resource.TestCheckResourceAttrSet(addr, "evidences.0.is_applicable"),
+					resource.TestCheckResourceAttrSet(addr, "evidences.0.is_custom"),
+					resource.TestCheckResourceAttrSet(addr, "evidences.0.is_uar"),
+					resource.TestCheckResourceAttrSet(addr, "evidences.0.items_count"),
+					resource.TestCheckResourceAttrSet(addr, "evidences.0.processing_state"),
+					resource.TestCheckResourceAttrSet(addr, "evidences.0.entity_type"),
+					resource.TestCheckResourceAttrSet(addr, "evidences.0.parent_id"),
+					resource.TestCheckResourceAttrSet(addr, "evidences.0.collection_timestamp"),
+					resource.TestCheckResourceAttrSet(addr, "evidences.0.service_instance_ids.#"),
+					// Returned empty for evidences that were never collected on a schedule.
+					testCheckAttrPresent(addr, "evidences.0.creation_time"),
+					testCheckAttrPresent(addr, "evidences.0.url"),
+				),
+			},
+		},
+	})
+}
