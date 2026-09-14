@@ -110,6 +110,9 @@ Test helpers are in `internal/provider/provider_test_helpers_test.go`:
 | `randomName(prefix)` | Generates unique resource names (`prefix-XXXXXX`) |
 | `testCheckTotalCountGreaterThan(resource, min)` | Asserts `total_count > min` |
 | `testCheckListCountMatchesTotalCount(resource, listAttr)` | Verifies list length matches `total_count` |
+| `testCheckAttrPresent(resource, attr)` | Asserts an attribute is present, whatever its value |
+| `testCheckAnyAttrSet(resource, pattern)` | Asserts a key matching `pattern` carries a value |
+| `testCheckAnyAttrPresent(resource, pattern)` | Asserts a key matching `pattern` is present |
 | `testAccFrameworkConfig(name)` | Generates a framework config |
 | `testAccControlCategoryConfig(fw, cat)` | Generates framework + category config |
 | `testAccControlConfig(fw, cat, ctrl)` | Generates framework + category + control config |

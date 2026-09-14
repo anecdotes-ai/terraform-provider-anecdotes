@@ -206,8 +206,10 @@ func testCheckNoRowHasAttr(resourceAddr, listAttr, field, want string) resource.
 	}
 }
 
-// TestAccAnalysisRulesDataSource_attributeSurface asserts rule_query_message is mapped
-// onto at least one listed rule.
+// TestAccAnalysisRulesDataSource_attributeSurface asserts each mapped attribute is
+// populated on at least one listed rule. account_scoping_list is set only on rules
+// scoped to included accounts, which TestAccAnalysisRule_scopedToServiceInstances
+// covers.
 func TestAccAnalysisRulesDataSource_attributeSurface(t *testing.T) {
 	const addr = "data.anecdotes_analysis_rules.surface"
 	resource.Test(t, resource.TestCase{
@@ -217,6 +219,18 @@ func TestAccAnalysisRulesDataSource_attributeSurface(t *testing.T) {
 			{
 				Config: `data "anecdotes_analysis_rules" "surface" {}`,
 				Check: resource.ComposeAggregateTestCheckFunc(
+					testCheckAnyAttrSet(addr, `^rules\.\d+\.rule_name$`),
+					testCheckAnyAttrSet(addr, `^rules\.\d+\.rule_message$`),
+					testCheckAnyAttrSet(addr, `^rules\.\d+\.rule_type$`),
+					testCheckAnyAttrSet(addr, `^rules\.\d+\.rule_state$`),
+					testCheckAnyAttrSet(addr, `^rules\.\d+\.rule_query_type$`),
+					testCheckAnyAttrSet(addr, `^rules\.\d+\.rule_query_str$`),
+					testCheckAnyAttrSet(addr, `^rules\.\d+\.rule_is_archived$`),
+					testCheckAnyAttrSet(addr, `^rules\.\d+\.alert_level$`),
+					testCheckAnyAttrSet(addr, `^rules\.\d+\.library_rule_id$`),
+					testCheckAnyAttrSet(addr, `^rules\.\d+\.last_updated$`),
+					testCheckAnyAttrSet(addr, `^rules\.\d+\.last_updated_by$`),
+					testCheckAnyAttrSet(addr, `^rules\.\d+\.account_scoping_type$`),
 					testCheckAnyAttrPresent(addr, `^rules\.\d+\.rule_query_message$`),
 				),
 			},
