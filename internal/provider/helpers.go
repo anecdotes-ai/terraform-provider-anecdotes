@@ -3,7 +3,13 @@
 
 package provider
 
-import "github.com/hashicorp/terraform-plugin-framework/types"
+import (
+	"context"
+
+	"github.com/anecdotes-ai/terraform-provider-anecdotes/internal/client"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/types"
+)
 
 // These helpers convert an optional Terraform attribute into a pointer for an API
 // request struct (pointer + `omitempty`), so a field the user did not configure is
@@ -48,10 +54,56 @@ func optionalFloat64Ptr(v types.Float64) *float64 {
 	return &f
 }
 
+// optionalStringValue converts a possibly-nil string pointer from the API into
+// a Terraform string value, null when the pointer is nil.
+// NOTE: near-twin of stringOrNull, which nulls "" rather than a nil pointer —
+// the two null rules differ on purpose; never merge. A *string pointing at ""
+// is a value the platform did set, and stays "" here.
+func optionalStringValue(v *string) types.String {
+	if v == nil {
+		return types.StringNull()
+	}
+	return types.StringValue(*v)
+}
+
+// stringsFromList converts an optional/required list-of-string attribute into a
+// []string, or nil when the value is null/unknown (so it marshals to JSON null,
+// matching the platform's canonical "no value" representation for these fields).
+func stringsFromList(ctx context.Context, list types.List, diags *diag.Diagnostics) []string {
+	if list.IsNull() || list.IsUnknown() {
+		return nil
+	}
+	var values []string
+	diags.Append(list.ElementsAs(ctx, &values, false)...)
+	return values
+}
+
+// stringsFromSet converts an optional/required set-of-string attribute into a
+// []string, or nil when the value is null/unknown (so it marshals to JSON null,
+// matching the platform's canonical "no value" representation for these fields).
+func stringsFromSet(ctx context.Context, set types.Set, diags *diag.Diagnostics) []string {
+	if set.IsNull() || set.IsUnknown() {
+		return nil
+	}
+	var values []string
+	diags.Append(set.ElementsAs(ctx, &values, false)...)
+	return values
+}
+
+// isCustomRole reports whether a role is a tenant-scoped custom role (as
+// opposed to a built-in global role). The rule itself lives on client.Role so
+// the client package can apply it too; this stays as the provider-side spelling
+// the data sources already read.
+func isCustomRole(role client.Role) bool {
+	return role.IsCustom()
+}
+
 // stringOrNull converts an API string into a Terraform value, mapping "" to
 // null. The platform sends JSON null for a field it holds no value for, which
 // decodes into the empty string; keeping that as "" would report a value the
 // platform never set.
+// NOTE: near-twin of optionalStringValue, which nulls a nil pointer rather than
+// "" — the two null rules differ on purpose; never merge.
 func stringOrNull(v string) types.String {
 	if v == "" {
 		return types.StringNull()

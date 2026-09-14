@@ -3,7 +3,7 @@
 Manage the [Anecdotes](https://anecdotes.ai) GRC (Governance, Risk & Compliance)
 compliance program as Infrastructure as Code.
 
-**10 resources** | **15 data sources** | Full create, read, update, delete, and import
+**14 resources** | **17 data sources** | Full create, read, update, delete, and import
 
 ---
 
@@ -102,6 +102,9 @@ anecdotes_playbook                # Event- or schedule-driven automation
 - **Mappings** — the M:N links between controls and requirements, and between requirements and evidence.
 - **Playbook** — an automation that runs one or more steps when a platform event fires or on a schedule.
 
+Administration and Settings resources (below) are independent of this hierarchy —
+they configure tenant-level account settings rather than compliance content.
+
 ---
 
 ## Resources
@@ -116,6 +119,10 @@ anecdotes_playbook                # Event- or schedule-driven automation
 | `anecdotes_mapping_control_requirement` | Links a control to one or more requirements. |
 | `anecdotes_requirement_view` | A requirement scoped beneath a parent requirement. |
 | `anecdotes_mapping_requirement_evidence` | Links a requirement to a piece of evidence. |
+| `anecdotes_role` | A tenant-scoped custom RBAC role. |
+| `anecdotes_login_settings` | The tenant's Login Methods settings (singleton). |
+| `anecdotes_saml_configuration` | A SAML 2.0 identity provider configuration. |
+| `anecdotes_scim_api_key` | An API key scoped to SCIM provisioning. |
 | `anecdotes_analysis_rule` | A query evaluated against one evidence, raising a gap or a warning. |
 | `anecdotes_playbook` | An automation that runs steps on a platform event or a schedule. |
 
@@ -129,6 +136,7 @@ anecdotes_playbook                # Event- or schedule-driven automation
 | `anecdotes_requirement` / `anecdotes_requirements` | Look up one requirement, or list requirements. Both report `parent_id` and `view_name`, so a requirement view is read through these rather than through a data source of its own. |
 | `anecdotes_framework_folder` / `anecdotes_framework_folders` | Look up one framework folder, or list them. |
 | `anecdotes_evidences` | List evidence (read-only). |
+| `anecdotes_role` / `anecdotes_roles` | Look up one role, or list roles (built-in and custom). |
 | `anecdotes_analysis_rule` / `anecdotes_analysis_rules` | Look up one analysis rule, or list them. |
 | `anecdotes_playbook_library` | List the trigger events a playbook step can subscribe to. |
 | `anecdotes_playbook_action_library` | List the actions a playbook step can perform. |

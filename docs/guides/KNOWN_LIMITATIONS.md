@@ -78,6 +78,14 @@ The following behave differently:
   applied visibility. Set an empty set to hide every status.
 - `anecdotes_requirement.category` — always has a value (default
   `Custom Requirements`); set a different category rather than removing it.
+- `anecdotes_role.extends`, `full_access_frameworks` and `description` — each is
+  supplied by the platform when it is not configured, so removing the attribute
+  keeps the last applied value rather than clearing it, and the plan reports no
+  changes. Set the value you want instead: `extends = ["basic_role"]` returns a
+  role to the default inheritance, `full_access_frameworks = []` makes it
+  unscoped again, and a new `description` replaces the old one. `extends = []`
+  is rejected while planning, because the platform substitutes the default for
+  an empty `extends` exactly as it does for an omitted one.
 - `anecdotes_analysis_rule.rule_name` and `rule_message` — the platform keeps the
   value it holds rather than storing an empty one, so these can be changed but
   not cleared once set. Removing the attribute leaves the stored value in place;
@@ -102,6 +110,12 @@ management with `terraform import`. This recovery does not apply to
 `anecdotes_requirement_view`: `view_name` is not unique across views, so a
 by-name lookup could adopt the wrong one. A create error on a view always
 surfaces as-is.
+
+For `anecdotes_role` the lookup considers only tenant-scoped custom roles. A
+custom role's key is derived from its name rather than copied from it, so a
+custom role may carry the same `name` as a built-in global role without
+colliding on a key — the lookup would otherwise be able to reach a
+platform-owned role, and a later destroy would try to delete it.
 
 ## Playbook steps cannot be added or removed
 
@@ -301,6 +315,81 @@ validated at plan time; values outside the set are rejected before any API call.
 Requirement categories are the categories Anecdotes defines, the same list the
 Requirements Hub offers. Requirements that do not fit one of them belong under
 `Custom Requirements`.
+
+## Role permissions are submitted but not stored
+
+`anecdotes_role.permissions` matches the API's create and update contract, but
+the platform accepts and echoes the list without persisting or enforcing it. A
+role's real, effective permissions are always the inheritance-expanded
+resolution of `extends`, exposed separately as `effective_permissions`. Two
+consequences:
+
+- `permissions` never reports drift, because there is nothing on the platform to
+  compare against.
+- `terraform import` cannot populate it, so it is null on an imported role.
+  A configuration that does not set `permissions` — the sensible one, given the
+  platform ignores it — imports and plans clean. A configuration that does set
+  it shows one diff after import, which applies harmlessly and then settles.
+
+Use `extends` to grant access; that is the part that actually governs it.
+
+`extends` itself cannot be set to an empty set. The platform substitutes
+`["basic_role"]` for an empty `extends` exactly as it does for an omitted one,
+so an explicit `[]` could never be honored; it is rejected while planning.
+Omit the attribute to get the default. `full_access_frameworks = []` is
+accepted, and means the same thing as omitting it: an unscoped role.
+
+## SAML configuration display name must be unique
+
+`anecdotes_saml_configuration`'s `provider_id` is derived from `display_name`, so
+two configurations with the same `display_name` collide on the same identifier.
+Creating one fails with a conflict error rather than a generic uniqueness error
+— rename the configuration to resolve it.
+
+## SAML configuration rename does not carry provider_id forward
+
+`display_name` can be changed in place without replacing the resource, but
+`provider_id` is derived from `display_name` only once, at creation, and does
+not track a later rename. If Terraform state is lost after a rename,
+`provider_id` cannot be recomputed from the current `display_name` — look it
+up in the platform UI, or via the identity API's list endpoint, before
+importing. A later configuration created with the original (pre-rename)
+`display_name` also collides with the renamed one's `provider_id`, surfacing
+as a conflict on a name nobody is currently using.
+
+## SAML configuration delete confirms before treating a 502 as success
+
+The platform has no reliable way to report that a SAML configuration was
+already gone: an unknown `provider_id` and a genuine deletion failure both
+surface the same plain-text 502. Rather than treat every 502 as success,
+`terraform destroy` follows up with a read — only when that confirms the
+configuration is actually gone does the destroy succeed. A 502 caused by a
+real, transient failure, with the configuration still present, surfaces as an
+ordinary error instead, so it still shows up on the next `terraform plan`.
+
+## Login Methods settings is a singleton, without import
+
+`anecdotes_login_settings` manages the tenant's one login configuration, which
+always exists on the platform — there is nothing to look up by ID, so
+`terraform import` is not supported for this resource. Removing the resource
+block only stops Terraform from managing the settings; it does not reset or
+clear them.
+
+## SCIM API key secret is available only once
+
+`anecdotes_scim_api_key`'s `key` attribute holds the full secret only in the
+response to the create call — every later read from the platform returns just
+the last 8 characters. Store the value somewhere durable when you apply the
+resource; it cannot be retrieved again afterward, including via
+`terraform import` (an imported key's `key` attribute holds only the truncated
+value).
+
+This is also the one resource in this provider whose state file holds a
+working credential, not just a reference to one. `key` is marked `Sensitive`,
+so it is redacted from plan and apply output the same way the provider's own
+`api_key` is — but unlike `api_key`, this value **is** written to state and
+stays there for the life of the resource. Protect your state backend
+accordingly (see the README's authentication and secrets notes).
 
 ## Error reporting
 
