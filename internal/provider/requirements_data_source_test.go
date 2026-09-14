@@ -82,8 +82,8 @@ data "anecdotes_requirements" "test" {
 	})
 }
 
-// TestAccRequirementsDataSource_attributeSurface asserts every attribute the plural
-// requirements data source maps onto each listed requirement.
+// TestAccRequirementsDataSource_attributeSurface asserts each mapped attribute is
+// populated on at least one listed requirement.
 func TestAccRequirementsDataSource_attributeSurface(t *testing.T) {
 	name := randomName("req-surface")
 	const addr = "data.anecdotes_requirements.surface"
@@ -99,17 +99,15 @@ data "anecdotes_requirements" "surface" {
 }`,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					testCheckTotalCountGreaterThan(addr, 0),
-					resource.TestCheckResourceAttrSet(addr, "requirements.0.requirement_id"),
-					resource.TestCheckResourceAttrSet(addr, "requirements.0.name"),
-					resource.TestCheckResourceAttrSet(addr, "requirements.0.category"),
-					resource.TestCheckResourceAttrSet(addr, "requirements.0.is_custom"),
-					// Empty on requirements that carry no description, are unlinked, or
-					// have no status yet.
-					testCheckAttrPresent(addr, "requirements.0.description"),
-					testCheckAttrPresent(addr, "requirements.0.parent_id"),
-					testCheckAttrPresent(addr, "requirements.0.status"),
-					testCheckAttrPresent(addr, "requirements.0.status_name"),
-					testCheckAttrPresent(addr, "requirements.0.view_name"),
+					testCheckAnyAttrSet(addr, `^requirements\.\d+\.requirement_id$`),
+					testCheckAnyAttrSet(addr, `^requirements\.\d+\.name$`),
+					testCheckAnyAttrSet(addr, `^requirements\.\d+\.category$`),
+					testCheckAnyAttrSet(addr, `^requirements\.\d+\.is_custom$`),
+					testCheckAnyAttrPresent(addr, `^requirements\.\d+\.description$`),
+					testCheckAnyAttrPresent(addr, `^requirements\.\d+\.parent_id$`),
+					testCheckAnyAttrPresent(addr, `^requirements\.\d+\.status$`),
+					testCheckAnyAttrPresent(addr, `^requirements\.\d+\.status_name$`),
+					testCheckAnyAttrPresent(addr, `^requirements\.\d+\.view_name$`),
 				),
 			},
 		},

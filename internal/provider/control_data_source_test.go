@@ -37,8 +37,8 @@ data "anecdotes_control" "test" {
 	})
 }
 
-// TestAccControlDataSource_attributeSurface asserts every attribute the singular
-// control data source maps.
+// TestAccControlDataSource_attributeSurface asserts the attributes the other tests for
+// this data source do not cover.
 func TestAccControlDataSource_attributeSurface(t *testing.T) {
 	fw := randomName("fw-ctrl-ds-surface")
 	cat := randomName("cat-ctrl-ds-surface")
@@ -56,8 +56,6 @@ data "anecdotes_control" "surface" {
 }`,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttrSet(addr, "status"),
-					// tags is declared here but only ever populated by the plural
-					// anecdotes_controls data source, so it is not asserted.
 				),
 			},
 		},

@@ -41,8 +41,8 @@ func TestAccControlCategoriesDataSource_filterByName(t *testing.T) {
 	})
 }
 
-// TestAccControlCategoriesDataSource_attributeSurface asserts every attribute the
-// plural categories data source maps onto each listed category.
+// TestAccControlCategoriesDataSource_attributeSurface asserts each mapped attribute is
+// populated on at least one listed category.
 func TestAccControlCategoriesDataSource_attributeSurface(t *testing.T) {
 	fw := randomName("fw-cats-surface")
 	cat := randomName("cat-surface")

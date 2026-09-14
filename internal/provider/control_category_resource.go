@@ -103,7 +103,8 @@ func (r *ControlCategoryResource) Create(ctx context.Context, req resource.Creat
 		return
 	}
 
-	r.setControlCategoryState(&data, category)
+	// Set computed values
+	data.CategoryID = types.StringValue(category.CategoryID)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -127,17 +128,11 @@ func (r *ControlCategoryResource) Read(ctx context.Context, req resource.ReadReq
 		return
 	}
 
-	r.setControlCategoryState(&data, category)
-
-	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
-}
-
-// setControlCategoryState fills the model from a control category returned by the API,
-// so create and read settle on the same state shape.
-func (r *ControlCategoryResource) setControlCategoryState(data *ControlCategoryResourceModel, category *client.ControlCategory) {
-	data.CategoryID = types.StringValue(category.CategoryID)
+	// Update state
 	data.CategoryName = types.StringValue(category.CategoryName)
 	data.FrameworkID = types.StringValue(category.FrameworkID)
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
 func (r *ControlCategoryResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {

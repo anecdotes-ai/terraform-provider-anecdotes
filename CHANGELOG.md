@@ -49,14 +49,9 @@ the major version.
 
 ### Fixed
 
-- `anecdotes_control` applies the name, description and category returned by the
-  API after a create or an update, instead of keeping the planned values. Owners
-  and maturity level are written through their own endpoints and continue to
-  settle on the configured value.
-- An update whose response carries no control id no longer clears the id from
-  state; the control is read back instead.
-- `anecdotes_control_category` applies the created category to state instead of
-  only its id.
+- Creating a control or a control category no longer records an empty id when
+  the API answers with a body that parses but carries no id. The control
+  reports the failure, and the category is recovered by name.
 
 ---
 

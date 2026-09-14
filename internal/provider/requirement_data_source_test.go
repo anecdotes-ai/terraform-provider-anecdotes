@@ -34,8 +34,8 @@ data "anecdotes_requirement" "test" {
 	})
 }
 
-// TestAccRequirementDataSource_attributeSurface asserts every attribute the singular
-// requirement data source maps.
+// TestAccRequirementDataSource_attributeSurface asserts the attributes the other tests
+// for this data source do not cover.
 func TestAccRequirementDataSource_attributeSurface(t *testing.T) {
 	name := randomName("req-ds-surface")
 	const addr = "data.anecdotes_requirement.surface"
@@ -50,7 +50,6 @@ data "anecdotes_requirement" "surface" {
 }`,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttrSet(addr, "is_custom"),
-					// A standalone requirement has no status until it is linked.
 					testCheckAttrPresent(addr, "status"),
 					testCheckAttrPresent(addr, "status_name"),
 				),

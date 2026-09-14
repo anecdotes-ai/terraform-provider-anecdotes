@@ -54,8 +54,7 @@ func testAccPreCheck(t *testing.T) {
 }
 
 // testCheckAttrPresent asserts an attribute is present in state, whatever its value.
-// TestCheckResourceAttrSet and TestCheckResourceAttrWith both reject an empty value, so
-// neither can assert that the provider mapped an attribute the platform returns empty.
+// TestCheckResourceAttrSet and TestCheckResourceAttrWith both reject an empty value.
 func testCheckAttrPresent(resourceAddr, attr string) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
 		rs, ok := s.RootModule().Resources[resourceAddr]
@@ -69,15 +68,13 @@ func testCheckAttrPresent(resourceAddr, attr string) resource.TestCheckFunc {
 	}
 }
 
-// testCheckAnyAttrSet asserts at least one state key matching pattern carries a
-// non-empty value. Catalog data sources return platform-ordered lists, so pinning an
-// index would tie the assertion to that order rather than to the mapping.
+// testCheckAnyAttrSet asserts at least one state key matching pattern carries a non-empty
+// value, so a list assertion does not depend on element order.
 func testCheckAnyAttrSet(resourceAddr, pattern string) resource.TestCheckFunc {
 	return anyAttrCheck(resourceAddr, pattern, true)
 }
 
-// testCheckAnyAttrPresent is testCheckAnyAttrSet for attributes the platform may
-// legitimately return empty: it requires the key, not a value.
+// testCheckAnyAttrPresent is testCheckAnyAttrSet requiring only the key, not a value.
 func testCheckAnyAttrPresent(resourceAddr, pattern string) resource.TestCheckFunc {
 	return anyAttrCheck(resourceAddr, pattern, false)
 }

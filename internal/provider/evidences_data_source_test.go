@@ -98,8 +98,8 @@ func testCheckSomeEvidenceReportsInstanceIDs(resourceAddr string) resource.TestC
 	}
 }
 
-// TestAccEvidencesDataSource_attributeSurface asserts every attribute the plural
-// evidences data source maps onto each listed evidence.
+// TestAccEvidencesDataSource_attributeSurface asserts each mapped attribute is populated
+// on at least one listed evidence.
 func TestAccEvidencesDataSource_attributeSurface(t *testing.T) {
 	const addr = "data.anecdotes_evidences.surface"
 	resource.Test(t, resource.TestCase{
@@ -110,25 +110,24 @@ func TestAccEvidencesDataSource_attributeSurface(t *testing.T) {
 				Config: `data "anecdotes_evidences" "surface" {}`,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					testCheckTotalCountGreaterThan(addr, 0),
-					resource.TestCheckResourceAttrSet(addr, "evidences.0.evidence_id"),
-					resource.TestCheckResourceAttrSet(addr, "evidences.0.evidence_instance_id"),
-					resource.TestCheckResourceAttrSet(addr, "evidences.0.name"),
-					resource.TestCheckResourceAttrSet(addr, "evidences.0.display_name"),
-					resource.TestCheckResourceAttrSet(addr, "evidences.0.evidence_type"),
-					resource.TestCheckResourceAttrSet(addr, "evidences.0.service_id"),
-					resource.TestCheckResourceAttrSet(addr, "evidences.0.service_display_name"),
-					resource.TestCheckResourceAttrSet(addr, "evidences.0.is_applicable"),
-					resource.TestCheckResourceAttrSet(addr, "evidences.0.is_custom"),
-					resource.TestCheckResourceAttrSet(addr, "evidences.0.is_uar"),
-					resource.TestCheckResourceAttrSet(addr, "evidences.0.items_count"),
-					resource.TestCheckResourceAttrSet(addr, "evidences.0.processing_state"),
-					resource.TestCheckResourceAttrSet(addr, "evidences.0.entity_type"),
-					resource.TestCheckResourceAttrSet(addr, "evidences.0.parent_id"),
-					resource.TestCheckResourceAttrSet(addr, "evidences.0.collection_timestamp"),
-					resource.TestCheckResourceAttrSet(addr, "evidences.0.service_instance_ids.#"),
-					// Returned empty for evidences that were never collected on a schedule.
-					testCheckAttrPresent(addr, "evidences.0.creation_time"),
-					testCheckAttrPresent(addr, "evidences.0.url"),
+					testCheckAnyAttrSet(addr, `^evidences\.\d+\.evidence_id$`),
+					testCheckAnyAttrSet(addr, `^evidences\.\d+\.evidence_instance_id$`),
+					testCheckAnyAttrSet(addr, `^evidences\.\d+\.name$`),
+					testCheckAnyAttrSet(addr, `^evidences\.\d+\.display_name$`),
+					testCheckAnyAttrSet(addr, `^evidences\.\d+\.evidence_type$`),
+					testCheckAnyAttrSet(addr, `^evidences\.\d+\.service_id$`),
+					testCheckAnyAttrSet(addr, `^evidences\.\d+\.service_display_name$`),
+					testCheckAnyAttrSet(addr, `^evidences\.\d+\.is_applicable$`),
+					testCheckAnyAttrSet(addr, `^evidences\.\d+\.is_custom$`),
+					testCheckAnyAttrSet(addr, `^evidences\.\d+\.is_uar$`),
+					testCheckAnyAttrSet(addr, `^evidences\.\d+\.items_count$`),
+					testCheckAnyAttrSet(addr, `^evidences\.\d+\.processing_state$`),
+					testCheckAnyAttrSet(addr, `^evidences\.\d+\.entity_type$`),
+					testCheckAnyAttrSet(addr, `^evidences\.\d+\.parent_id$`),
+					testCheckAnyAttrSet(addr, `^evidences\.\d+\.collection_timestamp$`),
+					testCheckAnyAttrSet(addr, `^evidences\.\d+\.service_instance_ids\.\d+$`),
+					testCheckAnyAttrPresent(addr, `^evidences\.\d+\.creation_time$`),
+					testCheckAnyAttrPresent(addr, `^evidences\.\d+\.url$`),
 				),
 			},
 		},

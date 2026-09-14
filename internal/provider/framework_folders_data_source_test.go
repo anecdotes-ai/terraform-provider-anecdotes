@@ -27,8 +27,8 @@ func TestAccFrameworkFoldersDataSource_basic(t *testing.T) {
 	})
 }
 
-// TestAccFrameworkFoldersDataSource_attributeSurface asserts the folders data source
-// reports the frameworks each folder holds.
+// TestAccFrameworkFoldersDataSource_attributeSurface asserts frameworks_list is populated
+// on at least one listed folder.
 func TestAccFrameworkFoldersDataSource_attributeSurface(t *testing.T) {
 	name := randomName("fw-folders-surface")
 	const addr = "data.anecdotes_framework_folders.surface"

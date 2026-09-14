@@ -518,6 +518,17 @@ func (c *AnecdotesClient) CreateControlCategory(ctx context.Context, category *C
 		return nil, fmt.Errorf("failed to parse create category response: %w", err)
 	}
 
+	// A body that parses but carries no id is a partial response rather than the
+	// created category. Recover the category by name, the same way an ambiguous
+	// server error is recovered, rather than returning an empty id.
+	if result.CategoryID == "" {
+		existing, lookupErr := c.getControlCategoryByName(ctx, category.CategoryName, category.FrameworkID)
+		if lookupErr != nil {
+			return nil, fmt.Errorf("create category response carried no category id: %w", lookupErr)
+		}
+		return existing, nil
+	}
+
 	return &result, nil
 }
 
@@ -629,6 +640,13 @@ func (c *AnecdotesClient) AddControl(ctx context.Context, frameworkID string, co
 		return nil, fmt.Errorf("failed to parse create control response: %w", err)
 	}
 
+	// A body that parses but carries no id is a partial response rather than the
+	// created control. Report it instead of returning an empty id for the caller
+	// to write into state; the control may exist on the platform.
+	if result.ControlID == "" {
+		return nil, fmt.Errorf("create control response carried no control id")
+	}
+
 	return &result, nil
 }
 
@@ -647,12 +665,6 @@ func (c *AnecdotesClient) UpdateControl(ctx context.Context, frameworkID, contro
 	var result Control
 	if err := json.Unmarshal(respBody, &result); err != nil {
 		// If parsing fails, try to fetch the updated control
-		return c.GetControl(ctx, frameworkID, controlID)
-	}
-
-	// A body that parses but carries no identifier is a partial response, not a
-	// representation of the control. Read the control back instead.
-	if result.ControlID == "" {
 		return c.GetControl(ctx, frameworkID, controlID)
 	}
 

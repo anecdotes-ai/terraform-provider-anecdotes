@@ -63,8 +63,8 @@ data "anecdotes_controls" "test" {
 	})
 }
 
-// TestAccControlsDataSource_attributeSurface asserts every attribute the plural
-// controls data source maps onto each listed control.
+// TestAccControlsDataSource_attributeSurface asserts each mapped attribute is populated
+// on at least one listed control.
 func TestAccControlsDataSource_attributeSurface(t *testing.T) {
 	fw := randomName("fw-ctrls-surface")
 	cat := randomName("cat-ctrls-surface")
@@ -85,7 +85,6 @@ data "anecdotes_controls" "surface" {
 					testCheckAnyAttrSet(addr, `^controls\.\d+\.framework_id$`),
 					testCheckAnyAttrSet(addr, `^controls\.\d+\.category_id$`),
 					testCheckAnyAttrSet(addr, `^controls\.\d+\.status$`),
-					// Empty on a control created without them.
 					testCheckAnyAttrPresent(addr, `^controls\.\d+\.category$`),
 					testCheckAnyAttrPresent(addr, `^controls\.\d+\.description$`),
 					testCheckAnyAttrPresent(addr, `^controls\.\d+\.owners\.#$`),

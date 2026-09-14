@@ -206,8 +206,8 @@ func testCheckNoRowHasAttr(resourceAddr, listAttr, field, want string) resource.
 	}
 }
 
-// TestAccAnalysisRulesDataSource_attributeSurface asserts the rule query message is
-// mapped onto each listed rule. It is empty for rules whose query carries no message.
+// TestAccAnalysisRulesDataSource_attributeSurface asserts rule_query_message is mapped
+// onto at least one listed rule.
 func TestAccAnalysisRulesDataSource_attributeSurface(t *testing.T) {
 	const addr = "data.anecdotes_analysis_rules.surface"
 	resource.Test(t, resource.TestCase{

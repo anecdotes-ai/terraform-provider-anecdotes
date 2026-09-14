@@ -128,9 +128,8 @@ data "anecdotes_playbook_action_library" "test" {
 	})
 }
 
-// TestAccPlaybookLibraryDataSource_attributeSurface asserts every attribute the trigger
-// library maps, on both the event and its nested fields. The catalog is ordered by the
-// platform, so the assertions match any element rather than a fixed index.
+// TestAccPlaybookLibraryDataSource_attributeSurface asserts each mapped attribute is
+// populated on at least one event, and on at least one of its nested fields.
 func TestAccPlaybookLibraryDataSource_attributeSurface(t *testing.T) {
 	const addr = "data.anecdotes_playbook_library.surface"
 	resource.Test(t, resource.TestCase{
@@ -159,8 +158,8 @@ func TestAccPlaybookLibraryDataSource_attributeSurface(t *testing.T) {
 	})
 }
 
-// TestAccPlaybookActionLibraryDataSource_attributeSurface asserts every attribute the
-// action library maps, on both the action and its nested fields.
+// TestAccPlaybookActionLibraryDataSource_attributeSurface asserts each mapped attribute
+// is populated on at least one action, and on at least one of its nested fields.
 func TestAccPlaybookActionLibraryDataSource_attributeSurface(t *testing.T) {
 	const addr = "data.anecdotes_playbook_action_library.surface"
 	resource.Test(t, resource.TestCase{

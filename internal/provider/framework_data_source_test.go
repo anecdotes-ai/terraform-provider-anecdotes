@@ -35,9 +35,9 @@ data "anecdotes_framework" "test" {
 	})
 }
 
-// TestAccFrameworkDataSource_attributeSurface asserts every attribute the singular
-// data source is expected to populate. The auditor status objects are only filled in
-// once auditor configuration has been applied, so the framework is created with it.
+// TestAccFrameworkDataSource_attributeSurface asserts the attributes the other tests for
+// this data source do not cover. The framework is created with auditor configuration, so
+// the auditor status objects are populated.
 func TestAccFrameworkDataSource_attributeSurface(t *testing.T) {
 	folderName := randomName("folder-ds-surface")
 	fwName := randomName("fw-ds-surface")
@@ -80,7 +80,6 @@ data "anecdotes_framework" "surface" {
 					resource.TestCheckResourceAttrSet(addr, "can_auditor_view_soa_report"),
 					testCheckAttrPresent(addr, "framework_reference_field_name"),
 
-					// The control statuses chosen above must come back set, and the rest clear.
 					resource.TestCheckResourceAttr(addr, "framework_auditor_control_status.approved_by_auditor", "true"),
 					resource.TestCheckResourceAttr(addr, "framework_auditor_control_status.gap", "true"),
 					resource.TestCheckResourceAttr(addr, "framework_auditor_control_status.monitoring", "true"),

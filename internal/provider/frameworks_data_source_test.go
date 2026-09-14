@@ -59,8 +59,8 @@ func TestAccFrameworksDataSource_filterByApplicable(t *testing.T) {
 	})
 }
 
-// TestAccFrameworksDataSource_attributeSurface asserts every attribute the plural
-// frameworks data source maps onto each listed framework.
+// TestAccFrameworksDataSource_attributeSurface asserts each mapped attribute is populated
+// on at least one listed framework.
 func TestAccFrameworksDataSource_attributeSurface(t *testing.T) {
 	const addr = "data.anecdotes_frameworks.surface"
 	resource.Test(t, resource.TestCase{
