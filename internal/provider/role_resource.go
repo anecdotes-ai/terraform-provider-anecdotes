@@ -100,7 +100,7 @@ func (r *RoleResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 				Optional:            true,
 				Computed:            true,
 				ElementType:         types.StringType,
-				MarkdownDescription: "Base role keys this role inherits permissions from. Defaults to `[\"basic_role\"]` if omitted. Once set, removing it from configuration keeps the last applied value — set `[\"basic_role\"]` explicitly to return to the default. Cannot be set to an empty set — the platform has no representation for a role that inherits nothing, and applies the default instead; omit the attribute to get that default.",
+				MarkdownDescription: "Base role keys this role inherits permissions from. Defaults to `[\"basic_role\"]` when omitted on create. Cannot be set to an empty set: the platform has no representation for a role that inherits nothing and substitutes the default instead, so `[]` is rejected while planning. Removing the attribute from an existing role keeps the last applied value rather than clearing it — set `[\"basic_role\"]` explicitly to return to the default.",
 				Validators: []validator.Set{
 					// An empty set is not the same as omitting the attribute:
 					// the platform substitutes ["basic_role"] either way, so an

@@ -359,16 +359,40 @@ resource "anecdotes_role" "test" {
 }
 
 // The counterpart for full_access_frameworks: [] is the documented way to make
-// a scoped role unscoped again, and it only works because a configured empty
-// list is no longer overwritten with null.
+// a scoped role unscoped again. This exercises the real transition against a
+// framework created for the purpose, and only passes because a configured
+// empty list is no longer overwritten with null.
 func TestAccRoleResource_fullAccessFrameworksClearedByEmptyList(t *testing.T) {
 	name := randomName("role-fafclr")
+	folder := randomName("folder-fafclr")
+	framework := randomName("fw-fafclr")
+	fixtures := fmt.Sprintf(`
+resource "anecdotes_framework_folder" "test" {
+  name = %q
+}
+
+resource "anecdotes_framework" "test" {
+  name        = %q
+  description = "Fixture for role scoping"
+  folder_id   = anecdotes_framework_folder.test.folder_id
+}
+`, folder, framework)
+
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
-				Config: fmt.Sprintf(`
+				Config: fixtures + fmt.Sprintf(`
+resource "anecdotes_role" "test" {
+  name                   = %q
+  description            = "Scoped then unscoped"
+  full_access_frameworks = [anecdotes_framework.test.framework_id]
+}`, name),
+				Check: resource.TestCheckResourceAttr("anecdotes_role.test", "full_access_frameworks.#", "1"),
+			},
+			{
+				Config: fixtures + fmt.Sprintf(`
 resource "anecdotes_role" "test" {
   name                   = %q
   description            = "Scoped then unscoped"
