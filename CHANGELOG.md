@@ -21,7 +21,7 @@ the major version.
 
 ---
 
-## [Unreleased]
+## [1.2.0] - 2026-09-14
 
 ### Added
 
@@ -91,9 +91,6 @@ the major version.
   recommend using them to discover `permissions` values, which the platform
   ignores, and now say that their `permissions` is the resolved set the resource
   exposes as `effective_permissions`.
-
-### Fixed
-
 - Creating a control or a control category no longer records an empty id when
   the API answers with a body that parses but carries no id. The control
   reports the failure, and the category is recovered by name.
