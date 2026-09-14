@@ -75,11 +75,14 @@ the major version.
   substitutes `["basic_role"]` for an empty `extends` exactly as it does for an
   omitted one, so the configured value could never be honored and the apply
   failed as an inconsistent result. Omit the attribute to get the default.
-- Removing `anecdotes_role`'s `description`, `extends` or
-  `full_access_frameworks` from configuration now actually resets it. These are
-  Optional+Computed, so the prior value was carried into the plan and re-sent on
-  the full-object PUT: deleting `extends` reported "No changes" and silently
-  kept the inheritance that had just been removed.
+- Documented that `anecdotes_role`'s `description`, `extends` and
+  `full_access_frameworks` cannot be cleared by removing them from
+  configuration. All three are supplied by the platform when unset, so the
+  prior value is carried forward and the plan reports no changes. Each
+  attribute now says so, and KNOWN_LIMITATIONS lists the value to set instead:
+  `extends = ["basic_role"]` for the default inheritance and
+  `full_access_frameworks = []` for an unscoped role — the latter made
+  possible by the empty-list fix above.
 - `anecdotes_role.permissions` is now Optional rather than Required. It is never
   read back from the platform, so `terraform import` cannot populate it and a
   configuration was previously forced to carry a value the import could not

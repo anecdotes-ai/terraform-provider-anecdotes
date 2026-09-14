@@ -43,9 +43,9 @@ resource "anecdotes_role" "auditor_readonly" {
 
 ### Optional
 
-- `description` (String) The description of the role. If omitted, the platform auto-generates one.
-- `extends` (Set of String) Base role keys this role inherits permissions from. Defaults to `["basic_role"]` if omitted. Cannot be set to an empty set — the platform has no representation for a role that inherits nothing, and applies the default instead; omit the attribute to get that default.
-- `full_access_frameworks` (List of String) Framework IDs this role has full access to. Omit for an unscoped role; an empty list means the same thing.
+- `description` (String) The description of the role. If omitted, the platform auto-generates one. Once set, removing it from configuration keeps the last applied value — set a new description to change it.
+- `extends` (Set of String) Base role keys this role inherits permissions from. Defaults to `["basic_role"]` if omitted. Once set, removing it from configuration keeps the last applied value — set `["basic_role"]` explicitly to return to the default. Cannot be set to an empty set — the platform has no representation for a role that inherits nothing, and applies the default instead; omit the attribute to get that default.
+- `full_access_frameworks` (List of String) Framework IDs this role has full access to. Omit for an unscoped role; an empty list means the same thing. Once set, removing it from configuration keeps the last applied value — set `[]` to make the role unscoped again.
 - `permissions` (Set of String) Permissions to submit for this role (e.g. `control:read`, `evidence:read`). **The platform accepts and echoes this list but does not persist or enforce it** — a role's real, effective permissions are always the inheritance-expanded resolution of `extends`. See `effective_permissions` for that resolved set. This attribute exists to match the API's create/update contract; it never reflects drift, since the platform has no way to report a change to it. It is therefore also absent after an `import`: set it only if you want the value recorded in your configuration, and prefer `extends` to grant access.
 
 ### Read-Only

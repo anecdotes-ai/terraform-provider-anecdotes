@@ -78,6 +78,14 @@ The following behave differently:
   applied visibility. Set an empty set to hide every status.
 - `anecdotes_requirement.category` — always has a value (default
   `Custom Requirements`); set a different category rather than removing it.
+- `anecdotes_role.extends`, `full_access_frameworks` and `description` — each is
+  supplied by the platform when it is not configured, so removing the attribute
+  keeps the last applied value rather than clearing it, and the plan reports no
+  changes. Set the value you want instead: `extends = ["basic_role"]` returns a
+  role to the default inheritance, `full_access_frameworks = []` makes it
+  unscoped again, and a new `description` replaces the old one. `extends = []`
+  is rejected while planning, because the platform substitutes the default for
+  an empty `extends` exactly as it does for an omitted one.
 - `anecdotes_analysis_rule.rule_name` and `rule_message` — the platform keeps the
   value it holds rather than storing an empty one, so these can be changed but
   not cleared once set. Removing the attribute leaves the stored value in place;

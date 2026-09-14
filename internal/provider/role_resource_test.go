@@ -321,12 +321,14 @@ resource "anecdotes_role" "test" {
 	})
 }
 
-// Removing an Optional+Computed attribute from config must actually remove it.
-// Without the reset plan modifier the prior value is carried forward into the
-// plan and re-sent on the full-object PUT, so Terraform reports "No changes"
-// and the role silently keeps the inheritance the user just deleted.
-func TestAccRoleResource_removingExtendsResetsToDefault(t *testing.T) {
-	name := randomName("role-extdel")
+// extends cannot be cleared by removing it from configuration: it is
+// Optional+Computed, so the framework cannot tell "the user deleted this" from
+// "the user never set it and the platform computed it", and the prior value is
+// carried forward. The documented way to change it is to set the value you
+// want, so this pins that the escape hatch actually works — including that a
+// role can be returned to the platform default explicitly.
+func TestAccRoleResource_extendsResetByExplicitDefault(t *testing.T) {
+	name := randomName("role-extdef")
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -335,7 +337,7 @@ func TestAccRoleResource_removingExtendsResetsToDefault(t *testing.T) {
 				Config: fmt.Sprintf(`
 resource "anecdotes_role" "test" {
   name        = %q
-  description = "Extends removal"
+  description = "Extends reset"
   extends     = ["viewer_role"]
 }`, name),
 				Check: resource.TestCheckTypeSetElemAttr("anecdotes_role.test", "extends.*", "viewer_role"),
@@ -344,13 +346,35 @@ resource "anecdotes_role" "test" {
 				Config: fmt.Sprintf(`
 resource "anecdotes_role" "test" {
   name        = %q
-  description = "Extends removal"
+  description = "Extends reset"
+  extends     = ["basic_role"]
 }`, name),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					// Back to the platform default, not the removed value.
 					resource.TestCheckTypeSetElemAttr("anecdotes_role.test", "extends.*", "basic_role"),
 					resource.TestCheckResourceAttr("anecdotes_role.test", "extends.#", "1"),
 				),
+			},
+		},
+	})
+}
+
+// The counterpart for full_access_frameworks: [] is the documented way to make
+// a scoped role unscoped again, and it only works because a configured empty
+// list is no longer overwritten with null.
+func TestAccRoleResource_fullAccessFrameworksClearedByEmptyList(t *testing.T) {
+	name := randomName("role-fafclr")
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: fmt.Sprintf(`
+resource "anecdotes_role" "test" {
+  name                   = %q
+  description            = "Scoped then unscoped"
+  full_access_frameworks = []
+}`, name),
+				Check: resource.TestCheckResourceAttr("anecdotes_role.test", "full_access_frameworks.#", "0"),
 			},
 		},
 	})

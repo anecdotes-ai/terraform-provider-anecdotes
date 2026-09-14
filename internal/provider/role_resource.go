@@ -84,10 +84,7 @@ func (r *RoleResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 			"description": schema.StringAttribute{
 				Optional:            true,
 				Computed:            true,
-				MarkdownDescription: "The description of the role. If omitted, the platform auto-generates one.",
-				PlanModifiers: []planmodifier.String{
-					ResetOnConfigRemovalString(),
-				},
+				MarkdownDescription: "The description of the role. If omitted, the platform auto-generates one. Once set, removing it from configuration keeps the last applied value — set a new description to change it.",
 			},
 			"permissions": schema.SetAttribute{
 				Optional:            true,
@@ -103,7 +100,7 @@ func (r *RoleResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 				Optional:            true,
 				Computed:            true,
 				ElementType:         types.StringType,
-				MarkdownDescription: "Base role keys this role inherits permissions from. Defaults to `[\"basic_role\"]` if omitted. Cannot be set to an empty set — the platform has no representation for a role that inherits nothing, and applies the default instead; omit the attribute to get that default.",
+				MarkdownDescription: "Base role keys this role inherits permissions from. Defaults to `[\"basic_role\"]` if omitted. Once set, removing it from configuration keeps the last applied value — set `[\"basic_role\"]` explicitly to return to the default. Cannot be set to an empty set — the platform has no representation for a role that inherits nothing, and applies the default instead; omit the attribute to get that default.",
 				Validators: []validator.Set{
 					// An empty set is not the same as omitting the attribute:
 					// the platform substitutes ["basic_role"] either way, so an
@@ -112,18 +109,12 @@ func (r *RoleResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 					// the default came back. Reject it at plan time instead.
 					setvalidator.SizeAtLeast(1),
 				},
-				PlanModifiers: []planmodifier.Set{
-					ResetOnConfigRemovalSet(),
-				},
 			},
 			"full_access_frameworks": schema.ListAttribute{
 				Optional:            true,
 				Computed:            true,
 				ElementType:         types.StringType,
-				MarkdownDescription: "Framework IDs this role has full access to. Omit for an unscoped role; an empty list means the same thing.",
-				PlanModifiers: []planmodifier.List{
-					ResetOnConfigRemovalList(),
-				},
+				MarkdownDescription: "Framework IDs this role has full access to. Omit for an unscoped role; an empty list means the same thing. Once set, removing it from configuration keeps the last applied value — set `[]` to make the role unscoped again.",
 			},
 			"created_at": schema.StringAttribute{
 				Computed:    true,
