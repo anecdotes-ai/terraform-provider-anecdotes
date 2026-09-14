@@ -81,3 +81,35 @@ data "anecdotes_requirements" "test" {
 		},
 	})
 }
+
+// TestAccRequirementsDataSource_attributeSurface asserts each mapped attribute is
+// populated on at least one listed requirement.
+func TestAccRequirementsDataSource_attributeSurface(t *testing.T) {
+	name := randomName("req-surface")
+	const addr = "data.anecdotes_requirements.surface"
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccRequirementConfig(name) + `
+data "anecdotes_requirements" "surface" {
+  include_unlinked = true
+  depends_on       = [anecdotes_requirement.test]
+}`,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testCheckTotalCountGreaterThan(addr, 0),
+					testCheckAnyAttrSet(addr, `^requirements\.\d+\.requirement_id$`),
+					testCheckAnyAttrSet(addr, `^requirements\.\d+\.name$`),
+					testCheckAnyAttrSet(addr, `^requirements\.\d+\.category$`),
+					testCheckAnyAttrSet(addr, `^requirements\.\d+\.is_custom$`),
+					testCheckAnyAttrPresent(addr, `^requirements\.\d+\.description$`),
+					testCheckAnyAttrPresent(addr, `^requirements\.\d+\.parent_id$`),
+					testCheckAnyAttrPresent(addr, `^requirements\.\d+\.status$`),
+					testCheckAnyAttrPresent(addr, `^requirements\.\d+\.status_name$`),
+					testCheckAnyAttrPresent(addr, `^requirements\.\d+\.view_name$`),
+				),
+			},
+		},
+	})
+}

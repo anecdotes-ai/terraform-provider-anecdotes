@@ -127,3 +127,64 @@ data "anecdotes_playbook_action_library" "test" {
 		},
 	})
 }
+
+// TestAccPlaybookLibraryDataSource_attributeSurface asserts each mapped attribute is
+// populated on at least one event, and on at least one of its nested fields.
+func TestAccPlaybookLibraryDataSource_attributeSurface(t *testing.T) {
+	const addr = "data.anecdotes_playbook_library.surface"
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: `data "anecdotes_playbook_library" "surface" {}`,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testCheckAnyAttrSet(addr, `^events\.\d+\.event_text$`),
+					testCheckAnyAttrSet(addr, `^events\.\d+\.description$`),
+					testCheckAnyAttrPresent(addr, `^events\.\d+\.trigger_key$`),
+					testCheckAnyAttrPresent(addr, `^events\.\d+\.required_changed_field$`),
+					testCheckAnyAttrPresent(addr, `^events\.\d+\.coming_soon_actions\.#$`),
+					testCheckAnyAttrPresent(addr, `^events\.\d+\.event_fields\.#$`),
+
+					testCheckAnyAttrSet(addr, `^events\.\d+\.event_fields\.\d+\.field_id$`),
+					testCheckAnyAttrSet(addr, `^events\.\d+\.event_fields\.\d+\.display_name$`),
+					testCheckAnyAttrSet(addr, `^events\.\d+\.event_fields\.\d+\.type$`),
+					testCheckAnyAttrSet(addr, `^events\.\d+\.event_fields\.\d+\.description$`),
+					testCheckAnyAttrSet(addr, `^events\.\d+\.event_fields\.\d+\.aql_operator$`),
+					testCheckAnyAttrSet(addr, `^events\.\d+\.event_fields\.\d+\.is_filterable$`),
+					testCheckAnyAttrPresent(addr, `^events\.\d+\.event_fields\.\d+\.values\.#$`),
+				),
+			},
+		},
+	})
+}
+
+// TestAccPlaybookActionLibraryDataSource_attributeSurface asserts each mapped attribute
+// is populated on at least one action, and on at least one of its nested fields.
+func TestAccPlaybookActionLibraryDataSource_attributeSurface(t *testing.T) {
+	const addr = "data.anecdotes_playbook_action_library.surface"
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: `data "anecdotes_playbook_action_library" "surface" {}`,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testCheckAnyAttrSet(addr, `^actions\.\d+\.action_text$`),
+					testCheckAnyAttrSet(addr, `^actions\.\d+\.description$`),
+					testCheckAnyAttrSet(addr, `^actions\.\d+\.coming_soon$`),
+					testCheckAnyAttrPresent(addr, `^actions\.\d+\.action_category$`),
+					testCheckAnyAttrPresent(addr, `^actions\.\d+\.action_name$`),
+					testCheckAnyAttrPresent(addr, `^actions\.\d+\.action_fields\.#$`),
+
+					testCheckAnyAttrSet(addr, `^actions\.\d+\.action_fields\.\d+\.field_id$`),
+					testCheckAnyAttrSet(addr, `^actions\.\d+\.action_fields\.\d+\.display_name$`),
+					testCheckAnyAttrSet(addr, `^actions\.\d+\.action_fields\.\d+\.type$`),
+					testCheckAnyAttrSet(addr, `^actions\.\d+\.action_fields\.\d+\.is_required$`),
+					testCheckAnyAttrPresent(addr, `^actions\.\d+\.action_fields\.\d+\.description$`),
+					testCheckAnyAttrSet(addr, `^actions\.\d+\.action_fields\.\d+\.values\.#$`),
+				),
+			},
+		},
+	})
+}

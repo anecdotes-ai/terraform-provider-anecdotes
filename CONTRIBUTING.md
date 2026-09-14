@@ -36,6 +36,9 @@ Acceptance tests talk to a live Anecdotes tenant and are gated behind `TF_ACC=1`
 TF_ACC=1 ANECDOTES_API_KEY="your-key" go test -v -timeout 120m ./internal/provider/
 ```
 
+No automated job runs them, so a passing run of this suite is required before a
+release is tagged and approved.
+
 See [docs/guides/TESTING.md](docs/guides/TESTING.md) and
 [docs/guides/LOCAL_DEVELOPMENT.md](docs/guides/LOCAL_DEVELOPMENT.md) for details.
 

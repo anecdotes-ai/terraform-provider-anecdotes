@@ -50,23 +50,52 @@ TF_ACC=1 go test -v -timeout 120m ./internal/provider/
 
 Pull requests run the build, vet, unit tests with the race detector, lint,
 formatting, govulncheck, a release configuration check and the documentation
-check. Acceptance tests are not part of those jobs — run the full suite locally
-before a release.
+check. Acceptance tests are not part of those jobs: they need a live tenant, so
+no automated job runs them.
 
 The acceptance suite runs without `-race`. It is network-bound and runs against
 a live tenant, so it exercises less concurrency than the unit tests do.
+
+### Required before a release
+
+Because no automated job covers them, the acceptance suite is a **required step
+before tagging a release**, not a suggestion:
+
+```text
+Run the full TF_ACC=1 suite against the test tenant
+        ↓
+Confirm every test passed
+        ↓
+Record the result against the release
+        ↓
+Tag the release
+```
+
+Tagging alone does not publish. The release job runs in the `release`
+environment, which holds the signing secrets and waits for an approval, so the
+approval is where the suite result is confirmed. Approve only once the run above
+has passed.
 
 ---
 
 ## Test Coverage
 
-- **Acceptance tests** (`TF_ACC=1`, live tenant) cover all 7 resources
-  (create / update / import, where applicable) and all 11 data sources
+- **Acceptance tests** (`TF_ACC=1`, live tenant) cover all 10 resources
+  (create / update / import, where applicable) and all 15 data sources
   (singular lookups and plural list/filter). They are skipped automatically
   when `TF_ACC` is unset.
 - **Unit tests** (no tenant) cover plan-time enum validation, API error
   classification and diagnostics, optional-pointer helpers, and a source-wide
   audit that resources surface API errors through the shared helpers.
+
+Reading `go test -cover` without `TF_ACC` understates the provider package
+heavily, because nearly all resource and data-source logic only executes under
+acceptance tests. Measure a meaningful baseline with the suite enabled:
+
+```bash
+TF_ACC=1 go test -coverprofile=coverage.out -timeout 120m ./internal/provider/
+go tool cover -func=coverage.out | tail -1
+```
 
 ---
 
@@ -81,6 +110,9 @@ Test helpers are in `internal/provider/provider_test_helpers_test.go`:
 | `randomName(prefix)` | Generates unique resource names (`prefix-XXXXXX`) |
 | `testCheckTotalCountGreaterThan(resource, min)` | Asserts `total_count > min` |
 | `testCheckListCountMatchesTotalCount(resource, listAttr)` | Verifies list length matches `total_count` |
+| `testCheckAttrPresent(resource, attr)` | Asserts an attribute is present, whatever its value |
+| `testCheckAnyAttrSet(resource, pattern)` | Asserts a key matching `pattern` carries a value |
+| `testCheckAnyAttrPresent(resource, pattern)` | Asserts a key matching `pattern` is present |
 | `testAccFrameworkConfig(name)` | Generates a framework config |
 | `testAccControlCategoryConfig(fw, cat)` | Generates framework + category config |
 | `testAccControlConfig(fw, cat, ctrl)` | Generates framework + category + control config |

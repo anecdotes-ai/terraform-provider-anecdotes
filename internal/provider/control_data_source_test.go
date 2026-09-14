@@ -36,3 +36,28 @@ data "anecdotes_control" "test" {
 		},
 	})
 }
+
+// TestAccControlDataSource_attributeSurface asserts the attributes the other tests for
+// this data source do not cover.
+func TestAccControlDataSource_attributeSurface(t *testing.T) {
+	fw := randomName("fw-ctrl-ds-surface")
+	cat := randomName("cat-ctrl-ds-surface")
+	ctrl := randomName("ctrl-ds-surface")
+	const addr = "data.anecdotes_control.surface"
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccControlConfig(fw, cat, ctrl) + `
+data "anecdotes_control" "surface" {
+  control_id   = anecdotes_control.test.control_id
+  framework_id = anecdotes_framework.test.framework_id
+}`,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttrSet(addr, "status"),
+				),
+			},
+		},
+	})
+}

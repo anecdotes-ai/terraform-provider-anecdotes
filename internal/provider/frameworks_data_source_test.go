@@ -58,3 +58,28 @@ func TestAccFrameworksDataSource_filterByApplicable(t *testing.T) {
 		},
 	})
 }
+
+// TestAccFrameworksDataSource_attributeSurface asserts each mapped attribute is populated
+// on at least one listed framework.
+func TestAccFrameworksDataSource_attributeSurface(t *testing.T) {
+	const addr = "data.anecdotes_frameworks.surface"
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: `data "anecdotes_frameworks" "surface" {}`,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testCheckTotalCountGreaterThan(addr, 0),
+					testCheckAnyAttrSet(addr, `^frameworks\.\d+\.description$`),
+					testCheckAnyAttrSet(addr, `^frameworks\.\d+\.framework_status$`),
+					testCheckAnyAttrSet(addr, `^frameworks\.\d+\.framework_auditable$`),
+					testCheckAnyAttrSet(addr, `^frameworks\.\d+\.is_applicable$`),
+					testCheckAnyAttrSet(addr, `^frameworks\.\d+\.categories_count$`),
+					testCheckAnyAttrSet(addr, `^frameworks\.\d+\.references_count$`),
+					testCheckAnyAttrPresent(addr, `^frameworks\.\d+\.framework_controls_categories\.#$`),
+				),
+			},
+		},
+	})
+}

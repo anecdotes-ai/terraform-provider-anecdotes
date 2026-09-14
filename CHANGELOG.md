@@ -47,6 +47,12 @@ the major version.
 - `anecdotes_playbook_action_library` data source listing the actions a playbook
   step can perform.
 
+### Fixed
+
+- Creating a control or a control category no longer records an empty id when
+  the API answers with a body that parses but carries no id. The control
+  reports the failure, and the category is recovered by name.
+
 ---
 
 ## [1.1.1] - 2026-08-30
