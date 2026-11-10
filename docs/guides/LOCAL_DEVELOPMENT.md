@@ -8,7 +8,7 @@ How to build the provider from source and run it against a live Anecdotes accoun
 
 ## Prerequisites
 
-- **Go 1.25+** — [install Go](https://golang.org/doc/install)
+- **Go 1.26+** — [install Go](https://golang.org/doc/install)
 - **Terraform 1.0+** — [install Terraform](https://www.terraform.io/downloads)
 - **Make** — pre-installed on macOS/Linux
 - **Anecdotes API key** — Admin role required

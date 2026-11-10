@@ -8,7 +8,7 @@ page_title: "Testing - Anecdotes Provider Guide"
 
 ### Prerequisites
 
-- Go 1.25+
+- Go 1.26+
 - Terraform 1.0+ on your PATH
 - An Anecdotes API key with **Admin** role
 
