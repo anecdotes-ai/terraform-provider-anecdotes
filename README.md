@@ -158,7 +158,7 @@ level (`frameworks.tf`, `controls.tf`, `requirements.tf`, and so on).
 
 ### Prerequisites
 
-- Go 1.25+
+- Go 1.26+
 - Terraform 1.0+ on your PATH
 
 ### Build & Test
