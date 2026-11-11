@@ -718,6 +718,22 @@ func (c *AnecdotesClient) SetControlMaturityLevel(ctx context.Context, controlID
 	return err
 }
 
+// controlImplementationUpdate is the update body for a control's implementation
+// text. It carries no other field, so the update leaves the rest of the control
+// unchanged.
+type controlImplementationUpdate struct {
+	ControlImplementation string `json:"control_implementation"`
+}
+
+// SetControlImplementation sets a control's implementation text. It works on
+// any control, custom or provided with a framework. An empty string clears it.
+func (c *AnecdotesClient) SetControlImplementation(ctx context.Context, controlID, implementation string) error {
+	_, err := c.doRequest(ctx, "PUT", "/controls/control/"+controlID, controlImplementationUpdate{
+		ControlImplementation: implementation,
+	})
+	return err
+}
+
 // GetRequirement retrieves a specific requirement by ID
 func (c *AnecdotesClient) GetRequirement(ctx context.Context, requirementID string) (*Requirement, error) {
 	respBody, err := c.doRequest(ctx, "GET", "/api/v1/requirement/"+requirementID, nil)

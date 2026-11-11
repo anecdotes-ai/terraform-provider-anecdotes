@@ -60,6 +60,8 @@ anecdotes_framework          # Framework container (SOC2, ISO 27001, etc.)
     │
     └── anecdotes_control    # Controls within a framework (1:N)
             │
+            ├── anecdotes_control_implementation  # How the control is implemented (1:1)
+            │
             └── anecdotes_mapping_control_requirement  # Links to requirements (M:N)
                     │
                     └── anecdotes_requirement  # Standalone requirements (shared)
@@ -81,6 +83,7 @@ anecdotes_playbook           # Event- or schedule-driven automation
 
 - **Framework**: A compliance standard container (e.g., SOC2, ISO 27001)
 - **Control**: A prescriptive statement of what should be implemented
+- **Control Implementation**: How a control is implemented. Managed with ` + "`anecdotes_control_implementation`" + ` on any control, including controls provided with a framework
 - **Requirement**: An operational action that enforces controls (can be shared across frameworks)
 - **Requirement View**: A requirement scoped beneath a parent requirement, letting the same content apply per control or framework without duplicating it
 - **Control-Requirement Link**: The M:N relationship enabling cross-mapping
@@ -231,6 +234,7 @@ func (p *AnecdotesProvider) Resources(ctx context.Context) []func() resource.Res
 		NewFrameworkResource,
 		NewControlCategoryResource,
 		NewControlResource,
+		NewControlImplementationResource,
 		NewMappingControlRequirementResource,
 		NewRequirementResource,
 		NewRequirementViewResource,
