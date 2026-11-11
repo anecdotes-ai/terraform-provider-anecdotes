@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"testing"
 
+	"github.com/anecdotes-ai/terraform-provider-anecdotes/internal/client"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 )
@@ -167,6 +168,16 @@ func TestAccControlResource_platformProvidedRejected(t *testing.T) {
 func testAccPlatformControlImportID(t *testing.T) string {
 	t.Helper()
 
+	frameworkID, control := testAccFindPlatformControl(t, func(client.Control) bool { return true })
+	return frameworkID + "/" + control.ControlID
+}
+
+// testAccFindPlatformControl returns the first control provided by a platform
+// framework, in an adopted framework, that keep accepts, along with its
+// framework ID. It skips the test when the tenant has no such control.
+func testAccFindPlatformControl(t *testing.T, keep func(client.Control) bool) (string, client.Control) {
+	t.Helper()
+
 	c := testAccNewClient(t)
 	frameworks, err := c.ListFrameworks(context.Background())
 	if err != nil {
@@ -181,11 +192,11 @@ func testAccPlatformControlImportID(t *testing.T) string {
 			continue
 		}
 		for _, control := range controls {
-			if control.ControlIsCustom != nil && !*control.ControlIsCustom {
-				return framework.FrameworkID + "/" + control.ControlID
+			if control.ControlIsCustom != nil && !*control.ControlIsCustom && keep(control) {
+				return framework.FrameworkID, control
 			}
 		}
 	}
-	t.Skip("no platform-provided control on this tenant")
-	return ""
+	t.Skip("no matching platform-provided control on this tenant")
+	return "", client.Control{}
 }

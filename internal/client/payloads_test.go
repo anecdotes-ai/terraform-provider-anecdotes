@@ -610,6 +610,81 @@ func TestListRoles_ParsesFrameworkScopedRoleAttributes(t *testing.T) {
 	}
 }
 
+// SetControlImplementation sends the implementation text and nothing else, so
+// updating it cannot change any other field of the control.
+func TestSetControlImplementation_SendsOnlyTheImplementationField(t *testing.T) {
+	var method, path string
+	var body []byte
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/apikey/exchange") {
+			_, _ = w.Write([]byte("test-token"))
+			return
+		}
+		method, path = r.Method, r.URL.Path
+		body, _ = io.ReadAll(r.Body)
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+
+	if err := newTestClient(t, srv).SetControlImplementation(context.Background(), "c1", "Access is reviewed quarterly."); err != nil {
+		t.Fatalf("SetControlImplementation: %v", err)
+	}
+
+	if method != http.MethodPut || path != "/controls/control/c1" {
+		t.Errorf("expected PUT /controls/control/c1, got %s %s", method, path)
+	}
+
+	var payload map[string]interface{}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		t.Fatalf("unmarshal: %v (body %s)", err, body)
+	}
+	if len(payload) != 1 {
+		t.Errorf("expected only control_implementation in the body, got keys %v", keysOf(payload))
+	}
+	if payload["control_implementation"] != "Access is reviewed quarterly." {
+		t.Errorf("expected the implementation text, got %v", payload["control_implementation"])
+	}
+}
+
+// Clearing the implementation text sends it as an empty string, not as null or
+// an omitted field.
+func TestSetControlImplementation_EmptyStringClears(t *testing.T) {
+	body := captureRequest(t, func(c *AnecdotesClient) error {
+		return c.SetControlImplementation(context.Background(), "c1", "")
+	})
+
+	var payload map[string]interface{}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		t.Fatalf("unmarshal: %v (body %s)", err, body)
+	}
+	value, ok := payload["control_implementation"]
+	if !ok {
+		t.Fatalf("expected control_implementation in the body, got %s", body)
+	}
+	if value != "" {
+		t.Errorf("expected an empty string, got %#v", value)
+	}
+}
+
+// A control's implementation text decodes as written, and as empty when the
+// field is empty or absent.
+func TestControl_DecodesImplementation(t *testing.T) {
+	cases := map[string]string{
+		`{"control_id":"c1","control_implementation":"Access is reviewed quarterly."}`: "Access is reviewed quarterly.",
+		`{"control_id":"c1","control_implementation":""}`:                              "",
+		`{"control_id":"c1"}`: "",
+	}
+	for raw, want := range cases {
+		var c Control
+		if err := json.Unmarshal([]byte(raw), &c); err != nil {
+			t.Fatalf("unmarshal %s: %v", raw, err)
+		}
+		if c.ControlImplementation != want {
+			t.Errorf("%s: expected %q, got %q", raw, want, c.ControlImplementation)
+		}
+	}
+}
+
 func stringPtr(s string) *string { return &s }
 
 func keysOf(m map[string]interface{}) []string {
