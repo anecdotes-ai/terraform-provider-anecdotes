@@ -1282,7 +1282,6 @@ func (c *AnecdotesClient) GetRequirementEvidenceLink(ctx context.Context, requir
 }
 
 // GetControlMaturityLevel reads the maturity level from a control.
-// Note: SetControlMaturityLevel already exists above (line ~449).
 func (c *AnecdotesClient) GetControlMaturityLevel(ctx context.Context, controlID string) (string, error) {
 	respBody, err := c.doRequest(ctx, "POST", "/controls/control/read", map[string][]string{
 		"controls_ids": {controlID},
