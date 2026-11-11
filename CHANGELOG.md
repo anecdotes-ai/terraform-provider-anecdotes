@@ -38,6 +38,9 @@ the major version.
 - The combined example walkthrough no longer sets `tags` on
   `anecdotes_control`, which the resource does not support, so the walkthrough
   passes `terraform validate` again.
+- The provider documentation's resource model now lists every resource,
+  including framework folders, control categories and the account
+  administration resources.
 
 ### Security
 
