@@ -33,6 +33,12 @@ the major version.
 - `control_implementation` on the `anecdotes_control` and `anecdotes_controls`
   data sources.
 
+### Fixed
+
+- The combined example walkthrough no longer sets `tags` on
+  `anecdotes_control`, which the resource does not support, so the walkthrough
+  passes `terraform validate` again.
+
 ### Security
 
 - Build with Go 1.26.11 and `golang.org/x/net` v0.62.0. Both fix known

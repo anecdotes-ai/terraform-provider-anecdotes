@@ -14,9 +14,6 @@ resource "anecdotes_control" "anecdotes_control" {
 
   # Optional: Add owners (use valid emails from your Anecdotes account)
   # owners = ["user@example.com"]
-
-  # Optional: Add tags
-  tags = ["terraform", "test", "automated"]
 }
 
 # How the control is implemented. Works on any control, including controls
