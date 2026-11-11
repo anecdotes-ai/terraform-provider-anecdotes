@@ -23,6 +23,16 @@ the major version.
 
 ## [Unreleased]
 
+### Added
+
+- `anecdotes_control_implementation` resource for managing how a control is
+  implemented. It works on any control, including controls provided with a
+  framework, and manages only the implementation text: destroying it clears the
+  text and leaves the control in place. A control that already has
+  implementation text must be imported before it can be managed.
+- `control_implementation` on the `anecdotes_control` and `anecdotes_controls`
+  data sources.
+
 ### Security
 
 - Build with Go 1.26.11 and `golang.org/x/net` v0.62.0. Both fix known

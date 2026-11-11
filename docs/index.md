@@ -11,6 +11,8 @@ description: |-
      │
      └── anecdotes_control    # Controls within a framework (1:N)
              │
+             ├── anecdotes_control_implementation  # How the control is implemented (1:1)
+             │
              └── anecdotes_mapping_control_requirement  # Links to requirements (M:N)
                      │
                      └── anecdotes_requirement  # Standalone requirements (shared)
@@ -28,7 +30,7 @@ description: |-
      └── step                 # One or more steps, nested in the playbook (1:N)
  
  Key Concepts
- Framework: A compliance standard container (e.g., SOC2, ISO 27001)Control: A prescriptive statement of what should be implementedRequirement: An operational action that enforces controls (can be shared across frameworks)Requirement View: A requirement scoped beneath a parent requirement, letting the same content apply per control or framework without duplicating itControl-Requirement Link: The M:N relationship enabling cross-mappingEvidence: Data collected from a connected service, read through the anecdotes_evidences data sourceAnalysis Rule: A query evaluated against one evidence's collected data, raising a gap or a warning on the rows it matches. Rules the account authors are managed with anecdotes_analysis_rule; the rules shipped with the platform are read-onlyPlaybook: An automation that runs one or more steps when a platform event fires or on a schedule
+ Framework: A compliance standard container (e.g., SOC2, ISO 27001)Control: A prescriptive statement of what should be implementedControl Implementation: How a control is implemented. Managed with anecdotes_control_implementation on any control, including controls provided with a frameworkRequirement: An operational action that enforces controls (can be shared across frameworks)Requirement View: A requirement scoped beneath a parent requirement, letting the same content apply per control or framework without duplicating itControl-Requirement Link: The M:N relationship enabling cross-mappingEvidence: Data collected from a connected service, read through the anecdotes_evidences data sourceAnalysis Rule: A query evaluated against one evidence's collected data, raising a gap or a warning on the rows it matches. Rules the account authors are managed with anecdotes_analysis_rule; the rules shipped with the platform are read-onlyPlaybook: An automation that runs one or more steps when a platform event fires or on a schedule
  Authentication
  Generate an API token from the Anecdotes platform:
  Log into Anecdotes as an Admin userNavigate to Administration → API TokensCreate a new token with the Admin roleCopy the token and store it securely
@@ -64,6 +66,8 @@ anecdotes_framework          # Framework container (SOC2, ISO 27001, etc.)
     │
     └── anecdotes_control    # Controls within a framework (1:N)
             │
+            ├── anecdotes_control_implementation  # How the control is implemented (1:1)
+            │
             └── anecdotes_mapping_control_requirement  # Links to requirements (M:N)
                     │
                     └── anecdotes_requirement  # Standalone requirements (shared)
@@ -85,6 +89,7 @@ anecdotes_playbook           # Event- or schedule-driven automation
 
 - **Framework**: A compliance standard container (e.g., SOC2, ISO 27001)
 - **Control**: A prescriptive statement of what should be implemented
+- **Control Implementation**: How a control is implemented. Managed with `anecdotes_control_implementation` on any control, including controls provided with a framework
 - **Requirement**: An operational action that enforces controls (can be shared across frameworks)
 - **Requirement View**: A requirement scoped beneath a parent requirement, letting the same content apply per control or framework without duplicating it
 - **Control-Requirement Link**: The M:N relationship enabling cross-mapping

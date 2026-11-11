@@ -3,7 +3,7 @@
 Manage the [Anecdotes](https://anecdotes.ai) GRC (Governance, Risk & Compliance)
 compliance program as Infrastructure as Code.
 
-**14 resources** | **17 data sources** | Full create, read, update, delete, and import
+**15 resources** | **17 data sources** | Full create, read, update, delete, and import
 
 ---
 
@@ -114,6 +114,7 @@ they configure tenant-level account settings rather than compliance content.
 | `anecdotes_framework` | A compliance framework. |
 | `anecdotes_framework_folder` | A folder that groups frameworks. |
 | `anecdotes_control` | A control within a framework. |
+| `anecdotes_control_implementation` | How a control is implemented, on any control. |
 | `anecdotes_control_category` | A category grouping controls in a framework. |
 | `anecdotes_requirement` | An operational requirement. |
 | `anecdotes_mapping_control_requirement` | Links a control to one or more requirements. |

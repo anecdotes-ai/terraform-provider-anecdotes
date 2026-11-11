@@ -16,7 +16,8 @@ Every attribute in this provider falls into one of two groups:
 - **Terraform-owned** — the configuration is the source of truth. `terraform plan`
   reports any change made elsewhere, and `terraform apply` sets the value back to
   what the configuration says. Names, descriptions, owners, categories, folder
-  placement, and auditor configuration all work this way.
+  placement, control implementation text, and auditor configuration all work
+  this way.
 - **Platform-owned** — the platform is the source of truth and the attribute is
   read-only (`Computed`). Terraform records the current value and never writes
   it. Control status and `framework_auditable` work this way.

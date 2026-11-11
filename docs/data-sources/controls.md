@@ -53,6 +53,7 @@ Read-Only:
 - `category` (String) The control category name.
 - `category_id` (String) The control category ID.
 - `control_id` (String) The unique identifier of the control.
+- `control_implementation` (String) How the control is implemented, or null when the control has no implementation text.
 - `description` (String) The description of the control.
 - `framework_id` (String) The framework this control belongs to.
 - `name` (String) The name of the control.
