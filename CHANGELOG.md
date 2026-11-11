@@ -25,7 +25,7 @@ the major version.
 
 ### Security
 
-- Build with Go 1.26.10 and `golang.org/x/net` v0.62.0. Both fix known
+- Build with Go 1.26.11 and `golang.org/x/net` v0.62.0. Both fix known
   vulnerabilities, in the Go standard library (`net/http`, `crypto/x509` and
   `net/textproto`) and in `golang.org/x/net`, that `govulncheck` reported as
   reachable from the provider. Building the provider from source now requires
