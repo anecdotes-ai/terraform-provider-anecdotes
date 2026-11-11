@@ -230,7 +230,7 @@ func TestAccControlImplementationResource_existingTextRequiresImport(t *testing.
 	})
 }
 
-func TestAccControlImplementationResource_emptyTextRejected(t *testing.T) {
+func TestAccControlImplementationResource_emptyValuesRejected(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -238,7 +238,69 @@ func TestAccControlImplementationResource_emptyTextRejected(t *testing.T) {
 			{
 				Config:      testAccControlImplementationConfig("control_1000000000000", ""),
 				PlanOnly:    true,
-				ExpectError: regexp.MustCompile(`string length must be at least 1`),
+				ExpectError: regexp.MustCompile(`(?s)control_implementation.*string length must be at least 1`),
+			},
+			{
+				Config:      testAccControlImplementationConfig("", "Written by Terraform."),
+				PlanOnly:    true,
+				ExpectError: regexp.MustCompile(`(?s)control_id.*string length must be at least 1`),
+			},
+		},
+	})
+}
+
+// A control deleted outside Terraform drops out of state on the next refresh,
+// and the following apply recreates the control and sets its text again.
+func TestAccControlImplementationResource_controlDeletedOutsideTerraform(t *testing.T) {
+	fwName := randomName("fw-impl-gone")
+	catName := randomName("cat-impl-gone")
+	ctrlName := randomName("ctrl-impl-gone")
+	text := "Set again after the control was recreated."
+
+	config := testAccControlConfig(fwName, catName, ctrlName) + fmt.Sprintf(`
+resource "anecdotes_control_implementation" "test" {
+  control_id             = anecdotes_control.test.control_id
+  control_implementation = %q
+}`, text)
+
+	var frameworkID, deletedControlID string
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: config,
+				Check: func(s *terraform.State) error {
+					var err error
+					if frameworkID, err = stateAttr(s, "anecdotes_control.test", "framework_id"); err != nil {
+						return err
+					}
+					deletedControlID, err = stateAttr(s, "anecdotes_control.test", "control_id")
+					return err
+				},
+			},
+			{
+				PreConfig: func() {
+					if err := testAccNewClient(t).DeleteControl(context.Background(), frameworkID, deletedControlID); err != nil {
+						t.Fatalf("deleting the control outside Terraform: %v", err)
+					}
+				},
+				Config: config,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttrPair(controlImplementationAddr, "control_id", "anecdotes_control.test", "control_id"),
+					func(s *terraform.State) error {
+						id, err := controlIDFromState(s)
+						if err != nil {
+							return err
+						}
+						if id == deletedControlID {
+							return fmt.Errorf("expected a recreated control, still on deleted control %s", id)
+						}
+						return nil
+					},
+					testCheckControlImplementationInAPI(t, controlIDFromState, text),
+				),
 			},
 		},
 	})
