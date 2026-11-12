@@ -14,7 +14,11 @@ resource "anecdotes_control" "anecdotes_control" {
 
   # Optional: Add owners (use valid emails from your Anecdotes account)
   # owners = ["user@example.com"]
+}
 
-  # Optional: Add tags
-  tags = ["terraform", "test", "automated"]
+# How the control is implemented. Works on any control, including controls
+# provided with a framework.
+resource "anecdotes_control_implementation" "anecdotes_control_implementation" {
+  control_id             = anecdotes_control.anecdotes_control.control_id
+  control_implementation = "Implemented by the Terraform provider walkthrough. Safe to delete."
 }

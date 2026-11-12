@@ -269,6 +269,10 @@ func AsAPIError(err error) (*APIError, bool) {
 // such returns with %w so IsNotFound recognizes them and Read can drop from state.
 var ErrNotFound = errors.New("resource not found")
 
+// ErrImplementationAlreadySet is returned by SetControlImplementationIfEmpty
+// when the control already has implementation text.
+var ErrImplementationAlreadySet = errors.New("control already has implementation text")
+
 // IsNotFound reports whether err is a missing-resource condition — either an APIError
 // with HTTP 404, or an error wrapping ErrNotFound (for list-then-filter lookups).
 // Resource Read methods use this to drop the resource from state instead of erroring.

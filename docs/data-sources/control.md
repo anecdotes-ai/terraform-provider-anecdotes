@@ -35,6 +35,7 @@ output "control_name" {
 
 - `category` (String) The category name this control belongs to.
 - `category_id` (String) The framework category ID this control belongs to.
+- `control_implementation` (String) How the control is implemented, or null when the control has no implementation text. Manage it with `anecdotes_control_implementation`.
 - `description` (String) A detailed description of the control.
 - `name` (String) The human-readable name of the control.
 - `owners` (List of String) List of email addresses of users who own this control.
