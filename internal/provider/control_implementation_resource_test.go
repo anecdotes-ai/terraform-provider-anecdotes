@@ -88,7 +88,8 @@ func TestAccControlImplementationResource_platformControl(t *testing.T) {
 	controlID := testAccEmptyPlatformControl(t)
 	otherControlID := testAccEmptyPlatformControl(t, controlID)
 
-	first := "First line.\nSecond line.\n\nFourth line, after a blank line."
+	// Ends with a line break, as a heredoc does.
+	first := "First line.\nSecond line.\n\nFourth line, after a blank line.\n"
 	second := "Access rights are reviewed quarterly."
 
 	resource.Test(t, resource.TestCase{
@@ -404,4 +405,32 @@ func testCheckControlsListImplementation(controlAddr, want string) resource.Test
 			return nil
 		}
 	}
+}
+
+// Two resources on the same control in one configuration: one sets the text
+// and the other is refused, instead of both applying and overwriting each other
+// on every apply.
+func TestAccControlImplementationResource_twoResourcesOneControl(t *testing.T) {
+	testAccSkipUnlessAcceptance(t)
+	controlID := testAccEmptyPlatformControl(t)
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testCheckControlImplementationInAPI(t, fixedControlID(controlID), ""),
+		Steps: []resource.TestStep{
+			{
+				Config: fmt.Sprintf(`
+resource "anecdotes_control_implementation" "a" {
+  control_id             = %q
+  control_implementation = "Text A"
+}
+
+resource "anecdotes_control_implementation" "b" {
+  control_id             = %q
+  control_implementation = "Text B"
+}`, controlID, controlID),
+				ExpectError: regexp.MustCompile(`Control Already Has Implementation Text`),
+			},
+		},
+	})
 }

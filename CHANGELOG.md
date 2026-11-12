@@ -29,7 +29,9 @@ the major version.
   implemented. It works on any control, including controls provided with a
   framework, and manages only the implementation text: destroying it clears the
   text and leaves the control in place. A control that already has
-  implementation text must be imported before it can be managed.
+  implementation text must be imported before it can be managed. Use one
+  resource per control; a second resource on the same control in one
+  configuration is refused.
 - `control_implementation` on the `anecdotes_control` and `anecdotes_controls`
   data sources.
 

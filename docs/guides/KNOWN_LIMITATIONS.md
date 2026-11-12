@@ -35,7 +35,7 @@ the `anecdotes_control` or `anecdotes_controls` data sources.
 
 The `anecdotes_control` resource manages controls created through Terraform or
 the Anecdotes application. Controls provided as part of a platform framework
-cannot be created or deleted, so `anecdotes_control` cannot manage them: reading
+cannot be deleted, so `anecdotes_control` cannot manage them: reading
 one, by import or from existing state, fails with an error pointing at the data
 sources. Read platform-provided controls with the `anecdotes_control` or
 `anecdotes_controls` data source.
@@ -50,6 +50,9 @@ framework, can be managed with `anecdotes_control_implementation`.
 - Creating it on a control that already has implementation text fails. Import
   the control first (`terraform import anecdotes_control_implementation.<name>
   <control_id>`), so existing text is never replaced without an explicit import.
+- Use one `anecdotes_control_implementation` per control, across all
+  configurations. Two resources on the same control overwrite each other's text
+  on every apply.
 - Removing the resource clears the text. The control and its other fields are
   unchanged.
 - The text is stored as written, and line breaks are kept. Text formatted in the

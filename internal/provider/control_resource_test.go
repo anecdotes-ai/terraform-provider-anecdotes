@@ -130,7 +130,7 @@ func TestAccControlResource_import(t *testing.T) {
 }
 
 // TestAccControlResource_platformProvidedRejected: a control that belongs to a
-// platform framework cannot be updated or deleted, so importing one must fail
+// platform framework cannot be deleted, so importing one must fail
 // rather than put an unmanageable object into state.
 func TestAccControlResource_platformProvidedRejected(t *testing.T) {
 	fwName := randomName("fw-ootb")

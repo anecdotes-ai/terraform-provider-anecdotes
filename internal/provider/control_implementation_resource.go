@@ -5,6 +5,7 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/anecdotes-ai/terraform-provider-anecdotes/internal/client"
@@ -56,6 +57,9 @@ has implementation text must be imported first, so existing text is never replac
 an explicit ` + "`terraform import`" + `. Destroying the resource clears the text and leaves
 the control and its other fields unchanged.
 
+Use one ` + "`anecdotes_control_implementation`" + ` per control, across all configurations.
+Two resources on the same control overwrite each other's text on every apply.
+
 The text is stored as written. Line breaks are kept. Text formatted in the Anecdotes
 application is stored as HTML, so an imported control's text can contain HTML tags.
 
@@ -106,20 +110,16 @@ func (r *ControlImplementationResource) Create(ctx context.Context, req resource
 
 	controlID := data.ControlID.ValueString()
 
-	control, err := r.client.GetControl(ctx, "", controlID)
-	if err != nil {
-		if client.IsNotFound(err) {
-			resp.Diagnostics.AddError(
-				"Control Not Found",
-				fmt.Sprintf("No control with ID %s exists in this account.", controlID),
-			)
-			return
-		}
-		addClientError(&resp.Diagnostics, "read control", err)
+	err := r.client.SetControlImplementationIfEmpty(ctx, controlID, data.ControlImplementation.ValueString())
+	switch {
+	case err == nil:
+	case client.IsNotFound(err):
+		resp.Diagnostics.AddError(
+			"Control Not Found",
+			fmt.Sprintf("No control with ID %s exists in this account.", controlID),
+		)
 		return
-	}
-
-	if control.ControlImplementation != "" {
+	case errors.Is(err, client.ErrImplementationAlreadySet):
 		resp.Diagnostics.AddError(
 			"Control Already Has Implementation Text",
 			fmt.Sprintf(
@@ -130,9 +130,7 @@ func (r *ControlImplementationResource) Create(ctx context.Context, req resource
 			),
 		)
 		return
-	}
-
-	if err := r.client.SetControlImplementation(ctx, controlID, data.ControlImplementation.ValueString()); err != nil {
+	default:
 		addClientError(&resp.Diagnostics, "set control implementation", err)
 		return
 	}

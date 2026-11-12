@@ -10,6 +10,8 @@ description: |-
   has implementation text must be imported first, so existing text is never replaced without
   an explicit terraform import. Destroying the resource clears the text and leaves
   the control and its other fields unchanged.
+  Use one anecdotes_control_implementation per control, across all configurations.
+  Two resources on the same control overwrite each other's text on every apply.
   The text is stored as written. Line breaks are kept. Text formatted in the Anecdotes
   application is stored as HTML, so an imported control's text can contain HTML tags.
   Relationships
@@ -29,6 +31,9 @@ Creating the resource sets the text on a control that has none. A control that a
 has implementation text must be imported first, so existing text is never replaced without
 an explicit `terraform import`. Destroying the resource clears the text and leaves
 the control and its other fields unchanged.
+
+Use one `anecdotes_control_implementation` per control, across all configurations.
+Two resources on the same control overwrite each other's text on every apply.
 
 The text is stored as written. Line breaks are kept. Text formatted in the Anecdotes
 application is stored as HTML, so an imported control's text can contain HTML tags.

@@ -6,11 +6,14 @@ package client
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 )
 
 // A wrong field name or a dropped empty value fails silently in both
@@ -663,6 +666,92 @@ func TestSetControlImplementation_EmptyStringClears(t *testing.T) {
 	}
 	if value != "" {
 		t.Errorf("expected an empty string, got %#v", value)
+	}
+}
+
+// controlImplementationServer serves one control whose implementation text
+// starts as current. Reads are slow, so concurrent callers overlap. It counts
+// the updates it receives.
+func controlImplementationServer(t *testing.T, current string) (*httptest.Server, func() int) {
+	t.Helper()
+	var mu sync.Mutex
+	puts := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/apikey/exchange"):
+			_, _ = w.Write([]byte("test-token"))
+		case r.Method == http.MethodPost && r.URL.Path == "/controls/control/read":
+			time.Sleep(100 * time.Millisecond)
+			mu.Lock()
+			body, _ := json.Marshal([]map[string]string{{"control_id": "c1", "control_implementation": current}})
+			mu.Unlock()
+			_, _ = w.Write(body)
+		case r.Method == http.MethodPut && r.URL.Path == "/controls/control/c1":
+			var payload controlImplementationUpdate
+			_ = json.NewDecoder(r.Body).Decode(&payload)
+			mu.Lock()
+			current = payload.ControlImplementation
+			puts++
+			mu.Unlock()
+			_, _ = w.Write([]byte(`{}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	return srv, func() int {
+		mu.Lock()
+		defer mu.Unlock()
+		return puts
+	}
+}
+
+// Two concurrent calls on the same empty control: exactly one sets the text
+// and the other finds it already set.
+func TestSetControlImplementationIfEmpty_ConcurrentCallsSetOnce(t *testing.T) {
+	srv, puts := controlImplementationServer(t, "")
+	c := newTestClient(t, srv)
+
+	errs := make([]error, 2)
+	var wg sync.WaitGroup
+	for i, text := range []string{"Text A", "Text B"} {
+		wg.Add(1)
+		go func(i int, text string) {
+			defer wg.Done()
+			errs[i] = c.SetControlImplementationIfEmpty(context.Background(), "c1", text)
+		}(i, text)
+	}
+	wg.Wait()
+
+	if got := puts(); got != 1 {
+		t.Errorf("expected exactly 1 update, got %d", got)
+	}
+	set, refused := 0, 0
+	for _, err := range errs {
+		switch {
+		case err == nil:
+			set++
+		case errors.Is(err, ErrImplementationAlreadySet):
+			refused++
+		default:
+			t.Errorf("unexpected error: %v", err)
+		}
+	}
+	if set != 1 || refused != 1 {
+		t.Errorf("expected one call to set and one to be refused, got %d set and %d refused", set, refused)
+	}
+}
+
+// A control that already has text is refused without an update.
+func TestSetControlImplementationIfEmpty_RefusesExistingText(t *testing.T) {
+	srv, puts := controlImplementationServer(t, "<p>Existing text</p>")
+
+	err := newTestClient(t, srv).SetControlImplementationIfEmpty(context.Background(), "c1", "New text")
+	if !errors.Is(err, ErrImplementationAlreadySet) {
+		t.Errorf("expected ErrImplementationAlreadySet, got %v", err)
+	}
+	if got := puts(); got != 0 {
+		t.Errorf("expected no update, got %d", got)
 	}
 }
 
