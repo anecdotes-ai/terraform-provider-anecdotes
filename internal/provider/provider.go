@@ -71,6 +71,8 @@ anecdotes_framework          # Framework container (SOC2, ISO 27001, etc.)
                             │
                             ├── anecdotes_requirement_view  # Views scoped beneath a requirement
                             │
+                            ├── anecdotes_mapping_requirement_evidence_scope  # Evidence scoped to a framework or control
+                            │
                             └── anecdotes_mapping_requirement_evidence  # Links to evidence (M:N)
                                     │
                                     └── evidence  # Collected data (anecdotes_evidences data source)
@@ -99,6 +101,7 @@ anecdotes_scim_api_key        # API key for SCIM provisioning
 - **Requirement**: An operational action that enforces controls (can be shared across frameworks)
 - **Requirement View**: A requirement scoped beneath a parent requirement, letting the same content apply per control or framework without duplicating it
 - **Control-Requirement Link**: The M:N relationship enabling cross-mapping
+- **Evidence Scope**: Evidence that counts for a requirement only within one framework or control, or is excluded there
 - **Evidence**: Data collected from a connected service, read through the ` + "`anecdotes_evidences`" + ` data source
 - **Analysis Rule**: A query evaluated against one evidence's collected data, raising a gap or a warning on the rows it matches. Rules the account authors are managed with ` + "`anecdotes_analysis_rule`" + `; the rules shipped with the platform are read-only
 - **Playbook**: An automation that runs one or more steps when a platform event fires or on a schedule
@@ -252,6 +255,7 @@ func (p *AnecdotesProvider) Resources(ctx context.Context) []func() resource.Res
 		NewRequirementResource,
 		NewRequirementViewResource,
 		NewMappingRequirementEvidenceResource,
+		NewMappingRequirementEvidenceScopeResource,
 		NewLoginSettingsResource,
 		NewScimApiKeyResource,
 		NewRoleResource,
