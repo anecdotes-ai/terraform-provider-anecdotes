@@ -921,3 +921,47 @@ resource "anecdotes_playbook" "test" {
 		},
 	})
 }
+
+// TestAccDrift_ControlImplementationRevert: implementation text changed or
+// cleared in the application surfaces as drift and is set back by the next
+// apply.
+func TestAccDrift_ControlImplementationRevert(t *testing.T) {
+	testAccSkipUnlessAcceptance(t)
+	controlID := testAccEmptyPlatformControl(t)
+
+	managed := "Managed by Terraform."
+	config := testAccControlImplementationConfig(controlID, managed)
+
+	outOfBand := func(text string) func() {
+		return func() {
+			if err := testAccNewClient(t).SetControlImplementation(context.Background(), controlID, text); err != nil {
+				t.Fatalf("out-of-band implementation change failed: %v", err)
+			}
+		}
+	}
+
+	checkManaged := resource.ComposeAggregateTestCheckFunc(
+		resource.TestCheckResourceAttr(controlImplementationAddr, "control_implementation", managed),
+		testCheckControlImplementationInAPI(t, controlIDFromState, managed),
+	)
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: config,
+				Check:  checkManaged,
+			},
+			{
+				PreConfig: outOfBand("Changed in the application."),
+				Config:    config,
+				Check:     checkManaged,
+			},
+			{
+				PreConfig: outOfBand(""),
+				Config:    config,
+				Check:     checkManaged,
+			},
+		},
+	})
+}

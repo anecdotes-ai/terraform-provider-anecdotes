@@ -31,10 +31,12 @@ type ControlDataSourceModel struct {
 	Name        types.String `tfsdk:"name"`
 	Description types.String `tfsdk:"description"`
 	CategoryID  types.String `tfsdk:"category_id"`
-	Category    types.String `tfsdk:"category"`
-	Status      types.String `tfsdk:"status"`
-	Owners      types.List   `tfsdk:"owners"`
-	Tags        types.List   `tfsdk:"tags"`
+	// Null when the control has no implementation text.
+	ControlImplementation types.String `tfsdk:"control_implementation"`
+	Category              types.String `tfsdk:"category"`
+	Status                types.String `tfsdk:"status"`
+	Owners                types.List   `tfsdk:"owners"`
+	Tags                  types.List   `tfsdk:"tags"`
 }
 
 func (d *ControlDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -61,6 +63,10 @@ func (d *ControlDataSource) Schema(ctx context.Context, req datasource.SchemaReq
 			"description": schema.StringAttribute{
 				Computed:            true,
 				MarkdownDescription: "A detailed description of the control.",
+			},
+			"control_implementation": schema.StringAttribute{
+				Computed:            true,
+				MarkdownDescription: "How the control is implemented, or null when the control has no implementation text. Manage it with `anecdotes_control_implementation`.",
 			},
 			"category_id": schema.StringAttribute{
 				Computed:            true,
@@ -113,6 +119,7 @@ func (d *ControlDataSource) Read(ctx context.Context, req datasource.ReadRequest
 	data.FrameworkID = types.StringValue(control.FrameworkID)
 	data.Name = types.StringValue(control.ControlName)
 	data.Description = types.StringValue(control.ControlDescription)
+	data.ControlImplementation = stringOrNull(control.ControlImplementation)
 	data.CategoryID = types.StringValue(control.ControlFrameworkCategoryID)
 	data.Category = types.StringValue(control.ControlCategory)
 	data.Status = types.StringValue(control.ControlStatus.Status)

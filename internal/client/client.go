@@ -33,7 +33,7 @@ type AnecdotesClient struct {
 	// Serializes token refreshes so concurrent callers exchange the key once.
 	refreshMu sync.Mutex
 
-	// Serializes updates that rewrite a parent object's list.
+	// Serializes updates that read an object and then write it back.
 	parentLocks keyedMutex
 }
 
@@ -718,6 +718,38 @@ func (c *AnecdotesClient) SetControlMaturityLevel(ctx context.Context, controlID
 	return err
 }
 
+// controlImplementationUpdate is the update body for a control's implementation
+// text. It carries no other field, so the update leaves the rest of the control
+// unchanged.
+type controlImplementationUpdate struct {
+	ControlImplementation string `json:"control_implementation"`
+}
+
+// SetControlImplementation sets a control's implementation text. It works on
+// any control, custom or provided with a framework. An empty string clears it.
+func (c *AnecdotesClient) SetControlImplementation(ctx context.Context, controlID, implementation string) error {
+	_, err := c.doRequest(ctx, "PUT", "/controls/control/"+controlID, controlImplementationUpdate{
+		ControlImplementation: implementation,
+	})
+	return err
+}
+
+// SetControlImplementationIfEmpty sets a control's implementation text only
+// when it has none, and returns ErrImplementationAlreadySet otherwise. Calls for
+// the same control run one at a time, so two callers cannot both find it empty.
+func (c *AnecdotesClient) SetControlImplementationIfEmpty(ctx context.Context, controlID, implementation string) error {
+	defer c.parentLocks.lock("control_implementation:" + controlID)()
+
+	control, err := c.GetControl(ctx, "", controlID)
+	if err != nil {
+		return err
+	}
+	if control.ControlImplementation != "" {
+		return ErrImplementationAlreadySet
+	}
+	return c.SetControlImplementation(ctx, controlID, implementation)
+}
+
 // GetRequirement retrieves a specific requirement by ID
 func (c *AnecdotesClient) GetRequirement(ctx context.Context, requirementID string) (*Requirement, error) {
 	respBody, err := c.doRequest(ctx, "GET", "/api/v1/requirement/"+requirementID, nil)
@@ -1266,7 +1298,6 @@ func (c *AnecdotesClient) GetRequirementEvidenceLink(ctx context.Context, requir
 }
 
 // GetControlMaturityLevel reads the maturity level from a control.
-// Note: SetControlMaturityLevel already exists above (line ~449).
 func (c *AnecdotesClient) GetControlMaturityLevel(ctx context.Context, controlID string) (string, error) {
 	respBody, err := c.doRequest(ctx, "POST", "/controls/control/read", map[string][]string{
 		"controls_ids": {controlID},

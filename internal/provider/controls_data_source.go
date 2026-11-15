@@ -40,15 +40,16 @@ func (d *ControlsDataSource) Metadata(ctx context.Context, req datasource.Metada
 }
 
 var controlItemAttrTypes = map[string]attr.Type{
-	"control_id":   types.StringType,
-	"framework_id": types.StringType,
-	"name":         types.StringType,
-	"description":  types.StringType,
-	"category":     types.StringType,
-	"category_id":  types.StringType,
-	"status":       types.StringType,
-	"owners":       types.ListType{ElemType: types.StringType},
-	"tags":         types.ListType{ElemType: types.StringType},
+	"control_id":             types.StringType,
+	"framework_id":           types.StringType,
+	"name":                   types.StringType,
+	"description":            types.StringType,
+	"control_implementation": types.StringType,
+	"category":               types.StringType,
+	"category_id":            types.StringType,
+	"status":                 types.StringType,
+	"owners":                 types.ListType{ElemType: types.StringType},
+	"tags":                   types.ListType{ElemType: types.StringType},
 }
 
 func (d *ControlsDataSource) Schema(ctx context.Context, req datasource.SchemaRequest, resp *datasource.SchemaResponse) {
@@ -103,6 +104,10 @@ Lists all controls for a given framework, with optional filtering by category, n
 						},
 						"description": schema.StringAttribute{
 							Description: "The description of the control.",
+							Computed:    true,
+						},
+						"control_implementation": schema.StringAttribute{
+							Description: "How the control is implemented, or null when the control has no implementation text.",
 							Computed:    true,
 						},
 						"category": schema.StringAttribute{
@@ -194,15 +199,16 @@ func (d *ControlsDataSource) Read(ctx context.Context, req datasource.ReadReques
 		}
 
 		obj, diags := types.ObjectValue(controlItemAttrTypes, map[string]attr.Value{
-			"control_id":   types.StringValue(c.ControlID),
-			"framework_id": types.StringValue(c.FrameworkID),
-			"name":         types.StringValue(c.ControlName),
-			"description":  types.StringValue(c.ControlDescription),
-			"category":     types.StringValue(c.ControlFrameworkCategory),
-			"category_id":  types.StringValue(c.ControlFrameworkCategoryID),
-			"status":       types.StringValue(c.ControlStatus.Status),
-			"owners":       ownersList,
-			"tags":         tagsList,
+			"control_id":             types.StringValue(c.ControlID),
+			"framework_id":           types.StringValue(c.FrameworkID),
+			"name":                   types.StringValue(c.ControlName),
+			"description":            types.StringValue(c.ControlDescription),
+			"control_implementation": stringOrNull(c.ControlImplementation),
+			"category":               types.StringValue(c.ControlFrameworkCategory),
+			"category_id":            types.StringValue(c.ControlFrameworkCategoryID),
+			"status":                 types.StringValue(c.ControlStatus.Status),
+			"owners":                 ownersList,
+			"tags":                   tagsList,
 		})
 		resp.Diagnostics.Append(diags...)
 		items[i] = obj

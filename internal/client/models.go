@@ -105,6 +105,9 @@ type Control struct {
 	ControlFrameworkCategory   string `json:"control_group,omitempty"`
 	ControlFrameworkCategoryID string `json:"control_framework_category_id,omitempty"`
 
+	// How the control is implemented. Empty when no implementation text is set.
+	ControlImplementation string `json:"control_implementation,omitempty"`
+
 	// Status tracking
 	ControlStatus          ControlStatusObject `json:"control_status"`
 	ControlStatusUpdatedBy string              `json:"control_status_updated_by,omitempty"`

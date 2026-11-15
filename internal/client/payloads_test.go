@@ -6,11 +6,14 @@ package client
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 )
 
 // A wrong field name or a dropped empty value fails silently in both
@@ -607,6 +610,167 @@ func TestListRoles_ParsesFrameworkScopedRoleAttributes(t *testing.T) {
 	}
 	if tenant, _ := roles[0].Attributes["tenant"].(string); tenant != "cst_00000000" {
 		t.Errorf("expected attributes.tenant to survive parsing, got %v", roles[0].Attributes)
+	}
+}
+
+// SetControlImplementation sends the implementation text and nothing else, so
+// updating it cannot change any other field of the control.
+func TestSetControlImplementation_SendsOnlyTheImplementationField(t *testing.T) {
+	var method, path string
+	var body []byte
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/apikey/exchange") {
+			_, _ = w.Write([]byte("test-token"))
+			return
+		}
+		method, path = r.Method, r.URL.Path
+		body, _ = io.ReadAll(r.Body)
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+
+	if err := newTestClient(t, srv).SetControlImplementation(context.Background(), "c1", "Access is reviewed quarterly."); err != nil {
+		t.Fatalf("SetControlImplementation: %v", err)
+	}
+
+	if method != http.MethodPut || path != "/controls/control/c1" {
+		t.Errorf("expected PUT /controls/control/c1, got %s %s", method, path)
+	}
+
+	var payload map[string]interface{}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		t.Fatalf("unmarshal: %v (body %s)", err, body)
+	}
+	if len(payload) != 1 {
+		t.Errorf("expected only control_implementation in the body, got keys %v", keysOf(payload))
+	}
+	if payload["control_implementation"] != "Access is reviewed quarterly." {
+		t.Errorf("expected the implementation text, got %v", payload["control_implementation"])
+	}
+}
+
+// Clearing the implementation text sends it as an empty string, not as null or
+// an omitted field.
+func TestSetControlImplementation_EmptyStringClears(t *testing.T) {
+	body := captureRequest(t, func(c *AnecdotesClient) error {
+		return c.SetControlImplementation(context.Background(), "c1", "")
+	})
+
+	var payload map[string]interface{}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		t.Fatalf("unmarshal: %v (body %s)", err, body)
+	}
+	value, ok := payload["control_implementation"]
+	if !ok {
+		t.Fatalf("expected control_implementation in the body, got %s", body)
+	}
+	if value != "" {
+		t.Errorf("expected an empty string, got %#v", value)
+	}
+}
+
+// controlImplementationServer serves one control whose implementation text
+// starts as current. Reads are slow, so concurrent callers overlap. It counts
+// the updates it receives.
+func controlImplementationServer(t *testing.T, current string) (*httptest.Server, func() int) {
+	t.Helper()
+	var mu sync.Mutex
+	puts := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/apikey/exchange"):
+			_, _ = w.Write([]byte("test-token"))
+		case r.Method == http.MethodPost && r.URL.Path == "/controls/control/read":
+			time.Sleep(100 * time.Millisecond)
+			mu.Lock()
+			body, _ := json.Marshal([]map[string]string{{"control_id": "c1", "control_implementation": current}})
+			mu.Unlock()
+			_, _ = w.Write(body)
+		case r.Method == http.MethodPut && r.URL.Path == "/controls/control/c1":
+			var payload controlImplementationUpdate
+			_ = json.NewDecoder(r.Body).Decode(&payload)
+			mu.Lock()
+			current = payload.ControlImplementation
+			puts++
+			mu.Unlock()
+			_, _ = w.Write([]byte(`{}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	return srv, func() int {
+		mu.Lock()
+		defer mu.Unlock()
+		return puts
+	}
+}
+
+// Two concurrent calls on the same empty control: exactly one sets the text
+// and the other finds it already set.
+func TestSetControlImplementationIfEmpty_ConcurrentCallsSetOnce(t *testing.T) {
+	srv, puts := controlImplementationServer(t, "")
+	c := newTestClient(t, srv)
+
+	errs := make([]error, 2)
+	var wg sync.WaitGroup
+	for i, text := range []string{"Text A", "Text B"} {
+		wg.Add(1)
+		go func(i int, text string) {
+			defer wg.Done()
+			errs[i] = c.SetControlImplementationIfEmpty(context.Background(), "c1", text)
+		}(i, text)
+	}
+	wg.Wait()
+
+	if got := puts(); got != 1 {
+		t.Errorf("expected exactly 1 update, got %d", got)
+	}
+	set, refused := 0, 0
+	for _, err := range errs {
+		switch {
+		case err == nil:
+			set++
+		case errors.Is(err, ErrImplementationAlreadySet):
+			refused++
+		default:
+			t.Errorf("unexpected error: %v", err)
+		}
+	}
+	if set != 1 || refused != 1 {
+		t.Errorf("expected one call to set and one to be refused, got %d set and %d refused", set, refused)
+	}
+}
+
+// A control that already has text is refused without an update.
+func TestSetControlImplementationIfEmpty_RefusesExistingText(t *testing.T) {
+	srv, puts := controlImplementationServer(t, "<p>Existing text</p>")
+
+	err := newTestClient(t, srv).SetControlImplementationIfEmpty(context.Background(), "c1", "New text")
+	if !errors.Is(err, ErrImplementationAlreadySet) {
+		t.Errorf("expected ErrImplementationAlreadySet, got %v", err)
+	}
+	if got := puts(); got != 0 {
+		t.Errorf("expected no update, got %d", got)
+	}
+}
+
+// A control's implementation text decodes as written, and as empty when the
+// field is empty or absent.
+func TestControl_DecodesImplementation(t *testing.T) {
+	cases := map[string]string{
+		`{"control_id":"c1","control_implementation":"Access is reviewed quarterly."}`: "Access is reviewed quarterly.",
+		`{"control_id":"c1","control_implementation":""}`:                              "",
+		`{"control_id":"c1"}`: "",
+	}
+	for raw, want := range cases {
+		var c Control
+		if err := json.Unmarshal([]byte(raw), &c); err != nil {
+			t.Fatalf("unmarshal %s: %v", raw, err)
+		}
+		if c.ControlImplementation != want {
+			t.Errorf("%s: expected %q, got %q", raw, want, c.ControlImplementation)
+		}
 	}
 }
 

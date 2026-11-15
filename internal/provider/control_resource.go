@@ -225,8 +225,9 @@ func (r *ControlResource) Read(ctx context.Context, req resource.ReadRequest, re
 		resp.Diagnostics.AddError(
 			"Control cannot be managed by Terraform",
 			fmt.Sprintf(
-				"Control %s is provided by the Anecdotes platform. Only custom controls can be updated or deleted, "+
-					"so Terraform cannot manage it.\n\n"+
+				"Control %s is provided by the Anecdotes platform. Only custom controls can be deleted, "+
+					"so anecdotes_control cannot manage it. Its implementation text can be managed with "+
+					"anecdotes_control_implementation.\n\n"+
 					"Read it with the anecdotes_control or anecdotes_controls data source instead. If it is already "+
 					"in state, remove it with `terraform state rm` before applying again.",
 				data.ControlID.ValueString(),
