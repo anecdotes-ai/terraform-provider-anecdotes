@@ -847,3 +847,197 @@ func TestCreateRole_5xxRecoveryAdoptsOwnCustomRole(t *testing.T) {
 		t.Errorf("expected the tenant's own custom role, got key=%q", role.Key)
 	}
 }
+
+// evidenceScopeServer serves one requirement, req1, whose scopes start as the
+// given JSON object. A PATCH replaces all scopes unless ignoreWrites is set.
+// It returns the server and a function reporting the stored scopes and the
+// PATCH bodies received.
+func evidenceScopeServer(t *testing.T, scopes string, ignoreWrites bool) (*httptest.Server, func() (string, []string)) {
+	t.Helper()
+	var mu sync.Mutex
+	var patches []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/apikey/exchange"):
+			_, _ = w.Write([]byte("test-token"))
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/requirement/req1":
+			time.Sleep(50 * time.Millisecond)
+			mu.Lock()
+			body := `[{"requirement_id":"req1","requirement_scoping_overrides":` + scopes + `}]`
+			mu.Unlock()
+			_, _ = w.Write([]byte(body))
+		case r.Method == http.MethodPatch && r.URL.Path == "/api/v1/requirement/req1":
+			raw, _ := io.ReadAll(r.Body)
+			var payload struct {
+				Requirement struct {
+					Scopes json.RawMessage `json:"requirement_scoping_overrides"`
+				} `json:"requirement"`
+			}
+			_ = json.Unmarshal(raw, &payload)
+			mu.Lock()
+			patches = append(patches, string(raw))
+			if !ignoreWrites && payload.Requirement.Scopes != nil {
+				scopes = string(payload.Requirement.Scopes)
+			}
+			mu.Unlock()
+			_, _ = w.Write([]byte(`{}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	return srv, func() (string, []string) {
+		mu.Lock()
+		defer mu.Unlock()
+		return scopes, patches
+	}
+}
+
+func assertJSONEqual(t *testing.T, got, want string) {
+	t.Helper()
+	var g, w interface{}
+	if err := json.Unmarshal([]byte(got), &g); err != nil {
+		t.Fatalf("unmarshal got: %v (%s)", err, got)
+	}
+	if err := json.Unmarshal([]byte(want), &w); err != nil {
+		t.Fatalf("unmarshal want: %v (%s)", err, want)
+	}
+	gb, _ := json.Marshal(g)
+	wb, _ := json.Marshal(w)
+	if string(gb) != string(wb) {
+		t.Errorf("scopes mismatch:\n got  %s\n want %s", gb, wb)
+	}
+}
+
+const existingScopes = `{
+	"fw1": {"evidences": {"e0": true}, "policies": {"p1": true}, "resource_type": "framework"},
+	"c1":  {"evidences": {"e9": false}, "resource_type": "control"}
+}`
+
+// A scope write resends every other scope, evidence and policy entry.
+func TestSetRequirementEvidenceScope_KeepsOtherEntries(t *testing.T) {
+	srv, state := evidenceScopeServer(t, existingScopes, false)
+	c := newTestClient(t, srv)
+
+	if err := c.CreateRequirementEvidenceScope(context.Background(), "req1", "fw1", EvidenceScopeFramework, "e1", true); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if err := c.SetRequirementEvidenceScope(context.Background(), "req1", "c2", EvidenceScopeControl, "e1", false); err != nil {
+		t.Fatalf("set: %v", err)
+	}
+
+	stored, _ := state()
+	assertJSONEqual(t, stored, `{
+		"fw1": {"evidences": {"e0": true, "e1": true}, "policies": {"p1": true}, "resource_type": "framework"},
+		"c1":  {"evidences": {"e9": false}, "resource_type": "control"},
+		"c2":  {"evidences": {"e1": false}, "resource_type": "control"}
+	}`)
+
+	got, err := c.GetRequirementEvidenceScope(context.Background(), "req1", "c2", "e1")
+	if err != nil || got.Included || got.ScopeType != EvidenceScopeControl {
+		t.Errorf("expected an excluded control entry, got %+v, err %v", got, err)
+	}
+	if _, err := c.GetRequirementEvidenceScope(context.Background(), "req1", "fw1", "missing"); !IsNotFound(err) {
+		t.Errorf("expected not found for a missing entry, got %v", err)
+	}
+}
+
+func TestCreateRequirementEvidenceScope_RefusesWithoutWriting(t *testing.T) {
+	srv, state := evidenceScopeServer(t, existingScopes, false)
+	c := newTestClient(t, srv)
+
+	err := c.CreateRequirementEvidenceScope(context.Background(), "req1", "fw1", EvidenceScopeFramework, "e0", false)
+	if !errors.Is(err, ErrEvidenceScopeExists) {
+		t.Errorf("expected ErrEvidenceScopeExists, got %v", err)
+	}
+	err = c.CreateRequirementEvidenceScope(context.Background(), "req1", "fw1", EvidenceScopeControl, "e1", true)
+	if !errors.Is(err, ErrEvidenceScopeTypeMismatch) {
+		t.Errorf("expected ErrEvidenceScopeTypeMismatch, got %v", err)
+	}
+	if _, patches := state(); len(patches) != 0 {
+		t.Errorf("expected no update, got %v", patches)
+	}
+}
+
+// An update that is accepted but not stored is reported as an error.
+func TestSetRequirementEvidenceScope_ReportsWriteThatWasNotStored(t *testing.T) {
+	srv, _ := evidenceScopeServer(t, `{}`, true)
+	c := newTestClient(t, srv)
+
+	err := c.CreateRequirementEvidenceScope(context.Background(), "req1", "fw1", EvidenceScopeFramework, "e1", true)
+	if !errors.Is(err, ErrEvidenceScopeNotStored) {
+		t.Errorf("expected ErrEvidenceScopeNotStored, got %v", err)
+	}
+}
+
+func TestRemoveRequirementEvidenceScope(t *testing.T) {
+	ctx := context.Background()
+	srv, state := evidenceScopeServer(t, `{
+		"fw1": {"evidences": {"e0": true, "e1": true}, "policies": {"p1": true}, "resource_type": "framework"},
+		"c1":  {"evidences": {"e9": false}, "resource_type": "control"}
+	}`, false)
+	c := newTestClient(t, srv)
+
+	// Another evidence remains in the scope.
+	if err := c.RemoveRequirementEvidenceScope(ctx, "req1", "fw1", "e1"); err != nil {
+		t.Fatalf("remove e1: %v", err)
+	}
+	// A scope that still holds policies is kept.
+	if err := c.RemoveRequirementEvidenceScope(ctx, "req1", "fw1", "e0"); err != nil {
+		t.Fatalf("remove e0: %v", err)
+	}
+	stored, _ := state()
+	assertJSONEqual(t, stored, `{
+		"fw1": {"evidences": {}, "policies": {"p1": true}, "resource_type": "framework"},
+		"c1":  {"evidences": {"e9": false}, "resource_type": "control"}
+	}`)
+
+	// An entry that does not exist is not an error and sends nothing.
+	_, before := state()
+	if err := c.RemoveRequirementEvidenceScope(ctx, "req1", "c1", "missing"); err != nil {
+		t.Fatalf("remove missing: %v", err)
+	}
+	if _, after := state(); len(after) != len(before) {
+		t.Errorf("expected no update for a missing entry")
+	}
+}
+
+// Removing the last scope sends an empty object, not an omitted field.
+func TestRemoveRequirementEvidenceScope_LastScopeSendsEmptyObject(t *testing.T) {
+	srv, state := evidenceScopeServer(t, `{"c1": {"evidences": {"e9": false}, "resource_type": "control"}}`, false)
+	c := newTestClient(t, srv)
+
+	if err := c.RemoveRequirementEvidenceScope(context.Background(), "req1", "c1", "e9"); err != nil {
+		t.Fatalf("remove: %v", err)
+	}
+	stored, patches := state()
+	assertJSONEqual(t, stored, `{}`)
+	if len(patches) != 1 || !strings.Contains(patches[0], `"requirement_scoping_overrides":{}`) {
+		t.Errorf("expected one update carrying an empty scopes object, got %v", patches)
+	}
+}
+
+// Concurrent writes on one requirement run one at a time, so neither is lost.
+func TestSetRequirementEvidenceScope_ConcurrentCallsKeepBoth(t *testing.T) {
+	srv, state := evidenceScopeServer(t, `{}`, false)
+	c := newTestClient(t, srv)
+
+	errs := make([]error, 2)
+	var wg sync.WaitGroup
+	for i, evidence := range []string{"e1", "e2"} {
+		wg.Add(1)
+		go func(i int, evidence string) {
+			defer wg.Done()
+			errs[i] = c.CreateRequirementEvidenceScope(context.Background(), "req1", "fw1", EvidenceScopeFramework, evidence, true)
+		}(i, evidence)
+	}
+	wg.Wait()
+
+	for _, err := range errs {
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}
+	stored, _ := state()
+	assertJSONEqual(t, stored, `{"fw1": {"evidences": {"e1": true, "e2": true}, "resource_type": "framework"}}`)
+}

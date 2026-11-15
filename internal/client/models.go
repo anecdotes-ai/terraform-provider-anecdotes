@@ -378,12 +378,12 @@ type RequirementUpdateRequest struct {
 	RequirementHelp     *string `json:"requirement_help,omitempty"`
 	RequirementCategory string  `json:"requirement_category,omitempty"`
 
-	RequirementOwners            *[]string              `json:"requirement_owners,omitempty"`
-	RequirementRelatedControls   []string               `json:"requirement_related_controls,omitempty"`
-	RequirementRelatedFrameworks []string               `json:"requirement_related_frameworks,omitempty"`
-	RequirementRelatedEvidences  *[]string              `json:"requirement_related_evidences,omitempty"`
-	EvidenceIDs                  []string               `json:"evidence_ids,omitempty"`
-	RequirementScopingOverrides  map[string]interface{} `json:"requirement_scoping_overrides,omitempty"`
+	RequirementOwners            *[]string               `json:"requirement_owners,omitempty"`
+	RequirementRelatedControls   []string                `json:"requirement_related_controls,omitempty"`
+	RequirementRelatedFrameworks []string                `json:"requirement_related_frameworks,omitempty"`
+	RequirementRelatedEvidences  *[]string               `json:"requirement_related_evidences,omitempty"`
+	EvidenceIDs                  []string                `json:"evidence_ids,omitempty"`
+	RequirementScopingOverrides  *map[string]interface{} `json:"requirement_scoping_overrides,omitempty"`
 }
 
 // RequirementViewCreateRequest represents the request body for creating a

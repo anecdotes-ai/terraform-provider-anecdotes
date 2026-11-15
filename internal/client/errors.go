@@ -273,6 +273,13 @@ var ErrNotFound = errors.New("resource not found")
 // when the control already has implementation text.
 var ErrImplementationAlreadySet = errors.New("control already has implementation text")
 
+// Errors returned by the requirement evidence scope methods.
+var (
+	ErrEvidenceScopeExists       = errors.New("evidence already has an entry in this scope")
+	ErrEvidenceScopeTypeMismatch = errors.New("scope is recorded with a different scope type")
+	ErrEvidenceScopeNotStored    = errors.New("evidence scope was not stored")
+)
+
 // IsNotFound reports whether err is a missing-resource condition — either an APIError
 // with HTTP 404, or an error wrapping ErrNotFound (for list-then-filter lookups).
 // Resource Read methods use this to drop the resource from state instead of erroring.
