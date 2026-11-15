@@ -34,6 +34,8 @@ the major version.
   configuration is refused.
 - `control_implementation` on the `anecdotes_control` and `anecdotes_controls`
   data sources.
+- `anecdotes_mapping_requirement_evidence_scope` resource for scoping evidence
+  on a requirement to one framework or one control, or excluding it there.
 
 ### Fixed
 

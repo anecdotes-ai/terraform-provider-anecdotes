@@ -22,6 +22,8 @@ description: |-
                              │
                              ├── anecdotes_requirement_view  # Views scoped beneath a requirement
                              │
+                             ├── anecdotes_mapping_requirement_evidence_scope  # Evidence scoped to a framework or control
+                             │
                              └── anecdotes_mapping_requirement_evidence  # Links to evidence (M:N)
                                      │
                                      └── evidence  # Collected data (anecdotes_evidences data source)
@@ -40,7 +42,7 @@ description: |-
  anecdotes_scim_api_key        # API key for SCIM provisioning
  
  Key Concepts
- Framework Folder: A folder that groups frameworksFramework: A compliance standard container (e.g., SOC2, ISO 27001)Control: A prescriptive statement of what should be implementedControl Category: A group of controls within a framework; every control belongs to oneControl Implementation: How a control is implemented. Managed with anecdotes_control_implementation on any control, including controls provided with a frameworkRequirement: An operational action that enforces controls (can be shared across frameworks)Requirement View: A requirement scoped beneath a parent requirement, letting the same content apply per control or framework without duplicating itControl-Requirement Link: The M:N relationship enabling cross-mappingEvidence: Data collected from a connected service, read through the anecdotes_evidences data sourceAnalysis Rule: A query evaluated against one evidence's collected data, raising a gap or a warning on the rows it matches. Rules the account authors are managed with anecdotes_analysis_rule; the rules shipped with the platform are read-onlyPlaybook: An automation that runs one or more steps when a platform event fires or on a scheduleAccount administration: Custom roles, login methods, SAML identity providers and SCIM API keys, managed with anecdotes_role, anecdotes_login_settings, anecdotes_saml_configuration and anecdotes_scim_api_key. They are independent of the compliance hierarchy
+ Framework Folder: A folder that groups frameworksFramework: A compliance standard container (e.g., SOC2, ISO 27001)Control: A prescriptive statement of what should be implementedControl Category: A group of controls within a framework; every control belongs to oneControl Implementation: How a control is implemented. Managed with anecdotes_control_implementation on any control, including controls provided with a frameworkRequirement: An operational action that enforces controls (can be shared across frameworks)Requirement View: A requirement scoped beneath a parent requirement, letting the same content apply per control or framework without duplicating itControl-Requirement Link: The M:N relationship enabling cross-mappingEvidence Scope: Evidence that counts for a requirement only within one framework or control, or is excluded thereEvidence: Data collected from a connected service, read through the anecdotes_evidences data sourceAnalysis Rule: A query evaluated against one evidence's collected data, raising a gap or a warning on the rows it matches. Rules the account authors are managed with anecdotes_analysis_rule; the rules shipped with the platform are read-onlyPlaybook: An automation that runs one or more steps when a platform event fires or on a scheduleAccount administration: Custom roles, login methods, SAML identity providers and SCIM API keys, managed with anecdotes_role, anecdotes_login_settings, anecdotes_saml_configuration and anecdotes_scim_api_key. They are independent of the compliance hierarchy
  Authentication
  Generate an API token from the Anecdotes platform:
  Log into Anecdotes as an Admin userNavigate to Administration → API TokensCreate a new token with the Admin roleCopy the token and store it securely
@@ -87,6 +89,8 @@ anecdotes_framework          # Framework container (SOC2, ISO 27001, etc.)
                             │
                             ├── anecdotes_requirement_view  # Views scoped beneath a requirement
                             │
+                            ├── anecdotes_mapping_requirement_evidence_scope  # Evidence scoped to a framework or control
+                            │
                             └── anecdotes_mapping_requirement_evidence  # Links to evidence (M:N)
                                     │
                                     └── evidence  # Collected data (anecdotes_evidences data source)
@@ -115,6 +119,7 @@ anecdotes_scim_api_key        # API key for SCIM provisioning
 - **Requirement**: An operational action that enforces controls (can be shared across frameworks)
 - **Requirement View**: A requirement scoped beneath a parent requirement, letting the same content apply per control or framework without duplicating it
 - **Control-Requirement Link**: The M:N relationship enabling cross-mapping
+- **Evidence Scope**: Evidence that counts for a requirement only within one framework or control, or is excluded there
 - **Evidence**: Data collected from a connected service, read through the `anecdotes_evidences` data source
 - **Analysis Rule**: A query evaluated against one evidence's collected data, raising a gap or a warning on the rows it matches. Rules the account authors are managed with `anecdotes_analysis_rule`; the rules shipped with the platform are read-only
 - **Playbook**: An automation that runs one or more steps when a platform event fires or on a schedule

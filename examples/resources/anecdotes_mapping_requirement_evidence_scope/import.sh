@@ -1,0 +1,2 @@
+# Import an evidence scope by requirement_id/scope_type/scope_id/evidence_id.
+terraform import anecdotes_mapping_requirement_evidence_scope.example requirement_12345/framework/framework_67890/evidence_54321

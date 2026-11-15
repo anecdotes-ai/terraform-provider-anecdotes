@@ -60,6 +60,20 @@ framework, can be managed with `anecdotes_control_implementation`.
   contain tags such as `<p>` and `<strong>`. Keep the HTML in the configuration
   to keep that formatting.
 
+## Evidence scopes
+
+`anecdotes_mapping_requirement_evidence_scope` manages one evidence entry in one
+framework or control scope of a requirement:
+
+- Creating it for an entry that already exists fails. Import the entry first
+  (`terraform import anecdotes_mapping_requirement_evidence_scope.<name>
+  <requirement_id>/<scope_type>/<scope_id>/<evidence_id>`).
+- A framework scope is stored only for a custom framework or a framework that is
+  active in the account. For any other framework the apply fails with "Evidence
+  Scope Not Stored".
+- `evidence_id` and a control `scope_id` are not checked against existing
+  objects. An ID that matches nothing is stored and has no effect.
+
 ## Requirements provided by the platform cannot be deleted
 
 The `anecdotes_requirement` resource manages both custom requirements and the

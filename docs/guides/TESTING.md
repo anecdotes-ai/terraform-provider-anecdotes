@@ -80,8 +80,8 @@ has passed.
 
 ## Test Coverage
 
-- **Acceptance tests** (`TF_ACC=1`, live tenant) cover all 10 resources
-  (create / update / import, where applicable) and all 15 data sources
+- **Acceptance tests** (`TF_ACC=1`, live tenant) cover all 16 resources
+  (create / update / import, where applicable) and all 17 data sources
   (singular lookups and plural list/filter). They are skipped automatically
   when `TF_ACC` is unset.
 - **Unit tests** (no tenant) cover plan-time enum validation, API error
