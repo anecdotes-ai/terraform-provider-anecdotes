@@ -965,3 +965,52 @@ func TestAccDrift_ControlImplementationRevert(t *testing.T) {
 		},
 	})
 }
+
+// TestAccDrift_EvidenceScopeRevert: an evidence scope entry flipped or removed
+// outside Terraform is set back by the next apply.
+func TestAccDrift_EvidenceScopeRevert(t *testing.T) {
+	config := testAccEvidenceScopePrerequisites("scope-drift") + testAccEvidenceScopeFrameworkConfig(false)
+
+	var requirementID, frameworkID string
+	captureIDs := func(s *terraform.State) (err error) {
+		requirementID, frameworkID, err = testAccEvidenceScopeIDs(s, "anecdotes_requirement.test", "framework")
+		return err
+	}
+	outOfBand := func(change func(c *client.AnecdotesClient) error) func() {
+		return func() {
+			if err := change(testAccNewClient(t)); err != nil {
+				t.Fatalf("out-of-band evidence scope change failed: %v", err)
+			}
+		}
+	}
+
+	checkManaged := resource.ComposeAggregateTestCheckFunc(
+		resource.TestCheckResourceAttr(evidenceScopeAddr, "excluded", "false"),
+		testCheckEvidenceScopeInAPI(t, "framework", scopeIncluded),
+	)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccEvidencePreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: config,
+				Check:  resource.ComposeAggregateTestCheckFunc(captureIDs, checkManaged),
+			},
+			{
+				PreConfig: outOfBand(func(c *client.AnecdotesClient) error {
+					return c.SetRequirementEvidenceScope(context.Background(), requirementID, frameworkID, client.EvidenceScopeFramework, testAccEvidenceID(), false)
+				}),
+				Config: config,
+				Check:  checkManaged,
+			},
+			{
+				PreConfig: outOfBand(func(c *client.AnecdotesClient) error {
+					return c.RemoveRequirementEvidenceScope(context.Background(), requirementID, frameworkID, testAccEvidenceID())
+				}),
+				Config: config,
+				Check:  checkManaged,
+			},
+		},
+	})
+}

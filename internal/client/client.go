@@ -1297,6 +1297,138 @@ func (c *AnecdotesClient) GetRequirementEvidenceLink(ctx context.Context, requir
 	return fmt.Errorf("evidence %s is not linked to requirement %s: %w", evidenceID, requirementID, ErrNotFound)
 }
 
+// Scope types of a requirement evidence scope.
+const (
+	EvidenceScopeFramework = "framework"
+	EvidenceScopeControl   = "control"
+)
+
+// RequirementEvidenceScope is one evidence entry in one scope of a requirement.
+// Included is false when the evidence is excluded from the scope.
+type RequirementEvidenceScope struct {
+	ScopeType string
+	Included  bool
+}
+
+// evidenceScopeEntry returns the entry for evidenceID in scopeID, if any.
+func evidenceScopeEntry(scopes map[string]interface{}, scopeID, evidenceID string) (*RequirementEvidenceScope, bool) {
+	entry, _ := scopes[scopeID].(map[string]interface{})
+	evidences, _ := entry["evidences"].(map[string]interface{})
+	included, ok := evidences[evidenceID].(bool)
+	if !ok {
+		return nil, false
+	}
+	scopeType, _ := entry["resource_type"].(string)
+	return &RequirementEvidenceScope{ScopeType: scopeType, Included: included}, true
+}
+
+// GetRequirementEvidenceScope returns the entry for an evidence in one scope of
+// a requirement.
+func (c *AnecdotesClient) GetRequirementEvidenceScope(ctx context.Context, requirementID, scopeID, evidenceID string) (*RequirementEvidenceScope, error) {
+	req, err := c.GetRequirement(ctx, requirementID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read requirement %s: %w", requirementID, err)
+	}
+
+	scope, ok := evidenceScopeEntry(req.RequirementScopingOverrides, scopeID, evidenceID)
+	if !ok {
+		return nil, fmt.Errorf("evidence %s has no entry in scope %s of requirement %s: %w", evidenceID, scopeID, requirementID, ErrNotFound)
+	}
+	return scope, nil
+}
+
+// CreateRequirementEvidenceScope adds an entry for an evidence in one scope of a
+// requirement. Returns ErrEvidenceScopeExists if the entry already exists.
+func (c *AnecdotesClient) CreateRequirementEvidenceScope(ctx context.Context, requirementID, scopeID, scopeType, evidenceID string, included bool) error {
+	return c.setRequirementEvidenceScope(ctx, requirementID, scopeID, scopeType, evidenceID, included, true)
+}
+
+// SetRequirementEvidenceScope adds or replaces the entry for an evidence in one
+// scope of a requirement.
+func (c *AnecdotesClient) SetRequirementEvidenceScope(ctx context.Context, requirementID, scopeID, scopeType, evidenceID string, included bool) error {
+	return c.setRequirementEvidenceScope(ctx, requirementID, scopeID, scopeType, evidenceID, included, false)
+}
+
+// setRequirementEvidenceScope uses read-modify-write: reads the scopes, sets the
+// one entry, writes all scopes back, and confirms the entry was stored.
+func (c *AnecdotesClient) setRequirementEvidenceScope(ctx context.Context, requirementID, scopeID, scopeType, evidenceID string, included, mustBeNew bool) error {
+	defer c.parentLocks.lock("requirement:" + requirementID)()
+
+	req, err := c.GetRequirement(ctx, requirementID)
+	if err != nil {
+		return fmt.Errorf("failed to read requirement %s: %w", requirementID, err)
+	}
+
+	scopes := req.RequirementScopingOverrides
+	if scopes == nil {
+		scopes = map[string]interface{}{}
+	}
+	entry, _ := scopes[scopeID].(map[string]interface{})
+	if entry == nil {
+		entry = map[string]interface{}{}
+	}
+	evidences, _ := entry["evidences"].(map[string]interface{})
+	if evidences == nil {
+		evidences = map[string]interface{}{}
+	}
+	if _, exists := evidences[evidenceID].(bool); exists && mustBeNew {
+		return fmt.Errorf("evidence %s in scope %s of requirement %s: %w", evidenceID, scopeID, requirementID, ErrEvidenceScopeExists)
+	}
+	if recorded, _ := entry["resource_type"].(string); recorded != "" && recorded != scopeType {
+		return fmt.Errorf("%w: scope %s of requirement %s is recorded as a %s scope", ErrEvidenceScopeTypeMismatch, scopeID, requirementID, recorded)
+	}
+
+	evidences[evidenceID] = included
+	entry["evidences"] = evidences
+	entry["resource_type"] = scopeType
+	scopes[scopeID] = entry
+
+	stored, err := c.UpdateRequirement(ctx, requirementID, &RequirementUpdateRequest{RequirementScopingOverrides: &scopes})
+	if err != nil {
+		return err
+	}
+
+	got, ok := evidenceScopeEntry(stored.RequirementScopingOverrides, scopeID, evidenceID)
+	if !ok || got.Included != included || got.ScopeType != scopeType {
+		return fmt.Errorf("%w: evidence %s in scope %s of requirement %s", ErrEvidenceScopeNotStored, evidenceID, scopeID, requirementID)
+	}
+	return nil
+}
+
+// RemoveRequirementEvidenceScope removes the entry for an evidence from one
+// scope of a requirement, and the scope itself once it is empty.
+func (c *AnecdotesClient) RemoveRequirementEvidenceScope(ctx context.Context, requirementID, scopeID, evidenceID string) error {
+	defer c.parentLocks.lock("requirement:" + requirementID)()
+
+	req, err := c.GetRequirement(ctx, requirementID)
+	if err != nil {
+		return fmt.Errorf("failed to read requirement %s: %w", requirementID, err)
+	}
+
+	scopes := req.RequirementScopingOverrides
+	entry, _ := scopes[scopeID].(map[string]interface{})
+	evidences, _ := entry["evidences"].(map[string]interface{})
+	if _, ok := evidences[evidenceID]; !ok {
+		return nil
+	}
+
+	delete(evidences, evidenceID)
+	policies, isObject := entry["policies"].(map[string]interface{})
+	if len(evidences) == 0 && (entry["policies"] == nil || (isObject && len(policies) == 0)) {
+		delete(scopes, scopeID)
+	}
+
+	stored, err := c.UpdateRequirement(ctx, requirementID, &RequirementUpdateRequest{RequirementScopingOverrides: &scopes})
+	if err != nil {
+		return err
+	}
+
+	if _, ok := evidenceScopeEntry(stored.RequirementScopingOverrides, scopeID, evidenceID); ok {
+		return fmt.Errorf("%w: evidence %s is still in scope %s of requirement %s", ErrEvidenceScopeNotStored, evidenceID, scopeID, requirementID)
+	}
+	return nil
+}
+
 // GetControlMaturityLevel reads the maturity level from a control.
 func (c *AnecdotesClient) GetControlMaturityLevel(ctx context.Context, controlID string) (string, error) {
 	respBody, err := c.doRequest(ctx, "POST", "/controls/control/read", map[string][]string{

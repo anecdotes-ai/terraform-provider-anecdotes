@@ -34,6 +34,8 @@ the major version.
   configuration is refused.
 - `control_implementation` on the `anecdotes_control` and `anecdotes_controls`
   data sources.
+- `anecdotes_mapping_requirement_evidence_scope` resource for scoping evidence
+  on a requirement to one framework or one control, or excluding it there.
 
 ### Fixed
 
@@ -43,6 +45,9 @@ the major version.
 - The provider documentation's resource model now lists every resource,
   including framework folders, control categories and the account
   administration resources.
+- The `anecdotes_mapping_requirement_evidence` documentation no longer advises
+  sequencing links to the same requirement with `depends_on`. The provider
+  applies them one at a time.
 
 ### Security
 

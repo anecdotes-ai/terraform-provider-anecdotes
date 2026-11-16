@@ -3,7 +3,7 @@
 Manage the [Anecdotes](https://anecdotes.ai) GRC (Governance, Risk & Compliance)
 compliance program as Infrastructure as Code.
 
-**15 resources** | **17 data sources** | Full create, read, update, delete, and import
+**16 resources** | **17 data sources** | Full create, read, update, delete, and import
 
 ---
 
@@ -81,6 +81,8 @@ anecdotes_framework_folder        # Folder that groups frameworks
                                     │
                                     ├── anecdotes_requirement_view              # Requirement scoped beneath a parent requirement
                                     │
+                                    ├── anecdotes_mapping_requirement_evidence_scope  # Evidence scoped to a framework or control
+                                    │
                                     └── anecdotes_mapping_requirement_evidence  # Links a requirement to evidence
                                             │
                                             └── evidence                        # Collected data (anecdotes_evidences data source)
@@ -120,6 +122,7 @@ they configure tenant-level account settings rather than compliance content.
 | `anecdotes_mapping_control_requirement` | Links a control to one or more requirements. |
 | `anecdotes_requirement_view` | A requirement scoped beneath a parent requirement. |
 | `anecdotes_mapping_requirement_evidence` | Links a requirement to a piece of evidence. |
+| `anecdotes_mapping_requirement_evidence_scope` | Scopes evidence on a requirement to one framework or control. |
 | `anecdotes_role` | A tenant-scoped custom RBAC role. |
 | `anecdotes_login_settings` | The tenant's Login Methods settings (singleton). |
 | `anecdotes_saml_configuration` | A SAML 2.0 identity provider configuration. |
