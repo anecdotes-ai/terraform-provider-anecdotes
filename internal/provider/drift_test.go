@@ -973,7 +973,7 @@ func TestAccDrift_EvidenceScopeRevert(t *testing.T) {
 
 	var requirementID, frameworkID string
 	captureIDs := func(s *terraform.State) (err error) {
-		requirementID, frameworkID, err = testAccEvidenceScopeIDs(s, "framework")
+		requirementID, frameworkID, err = testAccEvidenceScopeIDs(s, "anecdotes_requirement.test", "framework")
 		return err
 	}
 	outOfBand := func(change func(c *client.AnecdotesClient) error) func() {

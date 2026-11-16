@@ -7,8 +7,7 @@ description: |-
   anecdotes_mapping_requirement_evidence links evidence to a requirement everywhere the
   requirement is used. This resource adds the evidence within one framework or control only,
   or with excluded = true removes it there.
-  An entry that already exists must be imported. A framework scope is stored only for a
-  custom framework or one that is active in your account.
+  An entry that already exists must be imported. A framework scope is stored only for a custom framework or a framework that is active in your account.
 ---
 
 # anecdotes_mapping_requirement_evidence_scope (Resource)
@@ -19,8 +18,7 @@ Scopes evidence on a requirement to one framework or one control.
 requirement is used. This resource adds the evidence within one framework or control only,
 or with `excluded = true` removes it there.
 
-An entry that already exists must be imported. A framework scope is stored only for a
-custom framework or one that is active in your account.
+An entry that already exists must be imported. A framework scope is stored only for a custom framework or a framework that is active in your account.
 
 ## Example Usage
 
@@ -28,7 +26,7 @@ custom framework or one that is active in your account.
 resource "anecdotes_requirement" "access_review" {
   name        = "User access is reviewed quarterly"
   description = "Access rights are reviewed and approved every quarter"
-  category    = "Access Control"
+  category    = "Access"
 }
 
 # The evidence counts for the requirement only within this framework.
@@ -70,6 +68,6 @@ Import is supported using the following syntax:
 The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 
 ```shell
-# Import an evidence scope by requirement_id/scope_type/scope_id/evidence_id.
-terraform import anecdotes_mapping_requirement_evidence_scope.example requirement_12345/framework/framework_67890/evidence_54321
+# Import an evidence scope by requirement_id/scope_id/evidence_id.
+terraform import anecdotes_mapping_requirement_evidence_scope.example requirement_12345/framework_67890/evidence_54321
 ```

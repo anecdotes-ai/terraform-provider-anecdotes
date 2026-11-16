@@ -1,7 +1,7 @@
 resource "anecdotes_requirement" "access_review" {
   name        = "User access is reviewed quarterly"
   description = "Access rights are reviewed and approved every quarter"
-  category    = "Access Control"
+  category    = "Access"
 }
 
 # The evidence counts for the requirement only within this framework.

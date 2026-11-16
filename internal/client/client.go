@@ -1367,15 +1367,15 @@ func (c *AnecdotesClient) setRequirementEvidenceScope(ctx context.Context, requi
 	if entry == nil {
 		entry = map[string]interface{}{}
 	}
-	if recorded, _ := entry["resource_type"].(string); recorded != "" && recorded != scopeType {
-		return fmt.Errorf("scope %s of requirement %s is recorded as a %s scope: %w", scopeID, requirementID, recorded, ErrEvidenceScopeTypeMismatch)
-	}
 	evidences, _ := entry["evidences"].(map[string]interface{})
 	if evidences == nil {
 		evidences = map[string]interface{}{}
 	}
-	if _, exists := evidences[evidenceID]; exists && mustBeNew {
+	if _, exists := evidences[evidenceID].(bool); exists && mustBeNew {
 		return fmt.Errorf("evidence %s in scope %s of requirement %s: %w", evidenceID, scopeID, requirementID, ErrEvidenceScopeExists)
+	}
+	if recorded, _ := entry["resource_type"].(string); recorded != "" && recorded != scopeType {
+		return fmt.Errorf("%w: scope %s of requirement %s is recorded as a %s scope", ErrEvidenceScopeTypeMismatch, scopeID, requirementID, recorded)
 	}
 
 	evidences[evidenceID] = included
@@ -1390,7 +1390,7 @@ func (c *AnecdotesClient) setRequirementEvidenceScope(ctx context.Context, requi
 
 	got, ok := evidenceScopeEntry(stored.RequirementScopingOverrides, scopeID, evidenceID)
 	if !ok || got.Included != included || got.ScopeType != scopeType {
-		return fmt.Errorf("evidence %s in scope %s of requirement %s: %w", evidenceID, scopeID, requirementID, ErrEvidenceScopeNotStored)
+		return fmt.Errorf("%w: evidence %s in scope %s of requirement %s", ErrEvidenceScopeNotStored, evidenceID, scopeID, requirementID)
 	}
 	return nil
 }
@@ -1413,8 +1413,8 @@ func (c *AnecdotesClient) RemoveRequirementEvidenceScope(ctx context.Context, re
 	}
 
 	delete(evidences, evidenceID)
-	policies, _ := entry["policies"].(map[string]interface{})
-	if len(evidences) == 0 && len(policies) == 0 {
+	policies, isObject := entry["policies"].(map[string]interface{})
+	if len(evidences) == 0 && (entry["policies"] == nil || (isObject && len(policies) == 0)) {
 		delete(scopes, scopeID)
 	}
 
@@ -1424,7 +1424,7 @@ func (c *AnecdotesClient) RemoveRequirementEvidenceScope(ctx context.Context, re
 	}
 
 	if _, ok := evidenceScopeEntry(stored.RequirementScopingOverrides, scopeID, evidenceID); ok {
-		return fmt.Errorf("removing evidence %s from scope %s of requirement %s: %w", evidenceID, scopeID, requirementID, ErrEvidenceScopeNotStored)
+		return fmt.Errorf("%w: evidence %s is still in scope %s of requirement %s", ErrEvidenceScopeNotStored, evidenceID, scopeID, requirementID)
 	}
 	return nil
 }

@@ -954,6 +954,11 @@ func TestCreateRequirementEvidenceScope_RefusesWithoutWriting(t *testing.T) {
 	if !errors.Is(err, ErrEvidenceScopeTypeMismatch) {
 		t.Errorf("expected ErrEvidenceScopeTypeMismatch, got %v", err)
 	}
+	// An existing entry is reported as existing even when the scope type differs.
+	err = c.CreateRequirementEvidenceScope(context.Background(), "req1", "fw1", EvidenceScopeControl, "e0", true)
+	if !errors.Is(err, ErrEvidenceScopeExists) {
+		t.Errorf("expected ErrEvidenceScopeExists, got %v", err)
+	}
 	if _, patches := state(); len(patches) != 0 {
 		t.Errorf("expected no update, got %v", patches)
 	}
@@ -1000,6 +1005,133 @@ func TestRemoveRequirementEvidenceScope(t *testing.T) {
 	if _, after := state(); len(after) != len(before) {
 		t.Errorf("expected no update for a missing entry")
 	}
+}
+
+// A scope whose policies value is present and is not an empty object is kept
+// when its last evidence is removed.
+func TestRemoveRequirementEvidenceScope_KeepsScopeWithOtherPoliciesValue(t *testing.T) {
+	srv, state := evidenceScopeServer(t, `{"c1": {"evidences": {"e9": false}, "policies": ["p1"], "resource_type": "control"}}`, false)
+	c := newTestClient(t, srv)
+
+	if err := c.RemoveRequirementEvidenceScope(context.Background(), "req1", "c1", "e9"); err != nil {
+		t.Fatalf("remove: %v", err)
+	}
+	stored, _ := state()
+	assertJSONEqual(t, stored, `{"c1": {"evidences": {}, "policies": ["p1"], "resource_type": "control"}}`)
+}
+
+// A requirement that does not exist is reported as not found by every scope
+// method, whether the response is a 404 or an empty list.
+func TestRequirementEvidenceScope_RequirementNotFound(t *testing.T) {
+	responses := map[string]http.HandlerFunc{
+		"404": func(w http.ResponseWriter, r *http.Request) {
+			http.Error(w, `{"detail":"not found"}`, http.StatusNotFound)
+		},
+		"empty list": func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte(`[]`)) },
+	}
+	for name, respond := range responses {
+		t.Run(name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if strings.HasSuffix(r.URL.Path, "/apikey/exchange") {
+					_, _ = w.Write([]byte("test-token"))
+					return
+				}
+				if r.Method != http.MethodGet {
+					t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+				}
+				respond(w, r)
+			}))
+			defer srv.Close()
+			c := newTestClient(t, srv)
+			ctx := context.Background()
+
+			if _, err := c.GetRequirementEvidenceScope(ctx, "req1", "fw1", "e1"); !IsNotFound(err) {
+				t.Errorf("get: expected not found, got %v", err)
+			}
+			if err := c.CreateRequirementEvidenceScope(ctx, "req1", "fw1", EvidenceScopeFramework, "e1", true); !IsNotFound(err) {
+				t.Errorf("create: expected not found, got %v", err)
+			}
+			if err := c.SetRequirementEvidenceScope(ctx, "req1", "fw1", EvidenceScopeFramework, "e1", true); !IsNotFound(err) {
+				t.Errorf("set: expected not found, got %v", err)
+			}
+			if err := c.RemoveRequirementEvidenceScope(ctx, "req1", "fw1", "e1"); !IsNotFound(err) {
+				t.Errorf("remove: expected not found, got %v", err)
+			}
+		})
+	}
+}
+
+func TestGetRequirementEvidenceScope_ServerErrorIsNotNotFound(t *testing.T) {
+	shortenRetryBackoff(t)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/apikey/exchange"):
+			_, _ = w.Write([]byte("test-token"))
+		default:
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte(`{"detail":"upstream unavailable"}`))
+		}
+	}))
+	defer srv.Close()
+
+	_, err := newTestClient(t, srv).GetRequirementEvidenceScope(context.Background(), "req1", "fw1", "e1")
+	if err == nil {
+		t.Fatal("expected an error on server failure")
+	}
+	if IsNotFound(err) {
+		t.Errorf("a 500 must not satisfy IsNotFound (would drop state on a transient failure): %v", err)
+	}
+}
+
+// A removal that is accepted but not stored is reported as an error.
+func TestRemoveRequirementEvidenceScope_ReportsRemovalThatWasNotStored(t *testing.T) {
+	srv, _ := evidenceScopeServer(t, `{"c1": {"evidences": {"e9": false}, "resource_type": "control"}}`, true)
+	c := newTestClient(t, srv)
+
+	err := c.RemoveRequirementEvidenceScope(context.Background(), "req1", "c1", "e9")
+	if !errors.Is(err, ErrEvidenceScopeNotStored) {
+		t.Errorf("expected ErrEvidenceScopeNotStored, got %v", err)
+	}
+}
+
+// A removal and a write on one requirement run one at a time, so both apply.
+func TestRemoveRequirementEvidenceScope_ConcurrentWithSetKeepsBoth(t *testing.T) {
+	srv, state := evidenceScopeServer(t, `{"fw1": {"evidences": {"e1": true}, "resource_type": "framework"}}`, false)
+	c := newTestClient(t, srv)
+
+	errs := make([]error, 2)
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		errs[0] = c.RemoveRequirementEvidenceScope(context.Background(), "req1", "fw1", "e1")
+	}()
+	go func() {
+		defer wg.Done()
+		errs[1] = c.CreateRequirementEvidenceScope(context.Background(), "req1", "fw1", EvidenceScopeFramework, "e2", true)
+	}()
+	wg.Wait()
+
+	for _, err := range errs {
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	}
+	stored, _ := state()
+	assertJSONEqual(t, stored, `{"fw1": {"evidences": {"e2": true}, "resource_type": "framework"}}`)
+}
+
+// An entry whose value is not true or false is replaced by a create.
+func TestCreateRequirementEvidenceScope_ReplacesNonBooleanValue(t *testing.T) {
+	srv, state := evidenceScopeServer(t, `{"fw1": {"evidences": {"e1": null}, "resource_type": "framework"}}`, false)
+	c := newTestClient(t, srv)
+
+	if err := c.CreateRequirementEvidenceScope(context.Background(), "req1", "fw1", EvidenceScopeFramework, "e1", true); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	stored, _ := state()
+	assertJSONEqual(t, stored, `{"fw1": {"evidences": {"e1": true}, "resource_type": "framework"}}`)
 }
 
 // Removing the last scope sends an empty object, not an omitted field.

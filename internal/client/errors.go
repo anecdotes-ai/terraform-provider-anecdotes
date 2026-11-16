@@ -276,8 +276,8 @@ var ErrImplementationAlreadySet = errors.New("control already has implementation
 // Errors returned by the requirement evidence scope methods.
 var (
 	ErrEvidenceScopeExists       = errors.New("evidence already has an entry in this scope")
-	ErrEvidenceScopeTypeMismatch = errors.New("scope is recorded with a different scope type")
-	ErrEvidenceScopeNotStored    = errors.New("evidence scope was not stored")
+	ErrEvidenceScopeTypeMismatch = errors.New("scope type does not match")
+	ErrEvidenceScopeNotStored    = errors.New("the change was not present when the requirement was read back")
 )
 
 // IsNotFound reports whether err is a missing-resource condition — either an APIError

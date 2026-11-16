@@ -31,6 +31,9 @@ func NewMappingRequirementEvidenceScopeResource() resource.Resource {
 	return &MappingRequirementEvidenceScopeResource{}
 }
 
+// frameworkScopeStoredNote states which frameworks accept a scope.
+const frameworkScopeStoredNote = "A framework scope is stored only for a custom framework or a framework that is active in your account."
+
 // MappingRequirementEvidenceScopeResource defines the resource implementation for scoping evidence on requirements.
 type MappingRequirementEvidenceScopeResource struct {
 	client *client.AnecdotesClient
@@ -59,8 +62,7 @@ Scopes evidence on a requirement to one framework or one control.
 requirement is used. This resource adds the evidence within one framework or control only,
 or with ` + "`excluded = true`" + ` removes it there.
 
-An entry that already exists must be imported. A framework scope is stored only for a
-custom framework or one that is active in your account.
+An entry that already exists must be imported. ` + frameworkScopeStoredNote + `
 `,
 		Attributes: map[string]schema.Attribute{
 			"requirement_id": schema.StringAttribute{
@@ -126,10 +128,16 @@ func (r *MappingRequirementEvidenceScopeResource) ValidateConfig(ctx context.Con
 		return
 	}
 
+	checkEvidenceScopeType(&resp.Diagnostics, data)
+}
+
+// checkEvidenceScopeType adds an error when scope_id carries the prefix of the
+// other scope type.
+func checkEvidenceScopeType(diags *diag.Diagnostics, data MappingRequirementEvidenceScopeResourceModel) {
 	scopeID, scopeType := data.ScopeID.ValueString(), data.ScopeType.ValueString()
 	for _, prefixed := range []string{client.EvidenceScopeFramework, client.EvidenceScopeControl} {
 		if strings.HasPrefix(scopeID, prefixed+"_") && scopeType != prefixed {
-			resp.Diagnostics.AddAttributeError(
+			diags.AddAttributeError(
 				path.Root("scope_type"),
 				"Scope Type Does Not Match Scope ID",
 				fmt.Sprintf("scope_id %s is a %s ID, so scope_type must be %q.", scopeID, prefixed, prefixed),
@@ -164,7 +172,7 @@ func (r *MappingRequirementEvidenceScopeResource) Create(ctx context.Context, re
 		return
 	}
 	if err != nil {
-		r.addWriteError(&resp.Diagnostics, "add evidence scope", err)
+		addEvidenceScopeWriteError(&resp.Diagnostics, "add evidence scope", data, err)
 		return
 	}
 
@@ -206,7 +214,7 @@ func (r *MappingRequirementEvidenceScopeResource) Update(ctx context.Context, re
 		data.RequirementID.ValueString(), data.ScopeID.ValueString(), data.ScopeType.ValueString(),
 		data.EvidenceID.ValueString(), !data.Excluded.ValueBool())
 	if err != nil {
-		r.addWriteError(&resp.Diagnostics, "update evidence scope", err)
+		addEvidenceScopeWriteError(&resp.Diagnostics, "update evidence scope", data, err)
 		return
 	}
 
@@ -223,44 +231,52 @@ func (r *MappingRequirementEvidenceScopeResource) Delete(ctx context.Context, re
 	err := r.client.RemoveRequirementEvidenceScope(ctx,
 		data.RequirementID.ValueString(), data.ScopeID.ValueString(), data.EvidenceID.ValueString())
 	if err != nil && !client.IsNotFound(err) {
-		r.addWriteError(&resp.Diagnostics, "remove evidence scope", err)
+		addClientError(&resp.Diagnostics, "remove evidence scope", err)
 		return
 	}
 }
 
 func (r *MappingRequirementEvidenceScopeResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	// Import format: requirement_id/scope_type/scope_id/evidence_id
-	parts := splitImportID(req.ID, 4)
-	if parts == nil || (parts[1] != client.EvidenceScopeFramework && parts[1] != client.EvidenceScopeControl) {
+	// Import format: requirement_id/scope_id/evidence_id
+	parts := splitImportID(req.ID, 3)
+	if parts == nil {
 		resp.Diagnostics.AddError(
 			"Invalid Import ID",
-			fmt.Sprintf("Expected import ID in the format 'requirement_id/scope_type/scope_id/evidence_id', where scope_type is framework or control, got: %s", req.ID),
+			fmt.Sprintf("Expected import ID in the format 'requirement_id/scope_id/evidence_id', got: %s", req.ID),
 		)
 		return
 	}
 
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("requirement_id"), parts[0])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("scope_type"), parts[1])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("scope_id"), parts[2])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("evidence_id"), parts[3])...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("scope_id"), parts[1])...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("evidence_id"), parts[2])...)
 }
 
 func evidenceScopeImportID(data MappingRequirementEvidenceScopeResourceModel) string {
-	return strings.Join([]string{
-		data.RequirementID.ValueString(), data.ScopeType.ValueString(),
-		data.ScopeID.ValueString(), data.EvidenceID.ValueString(),
-	}, "/")
+	return data.RequirementID.ValueString() + "/" + data.ScopeID.ValueString() + "/" + data.EvidenceID.ValueString()
 }
 
-// addWriteError reports a failed scope write.
-func (r *MappingRequirementEvidenceScopeResource) addWriteError(diags *diag.Diagnostics, action string, err error) {
-	if errors.Is(err, client.ErrEvidenceScopeNotStored) {
+// addEvidenceScopeWriteError reports a failed create or update of a scope entry.
+func addEvidenceScopeWriteError(diags *diag.Diagnostics, action string, data MappingRequirementEvidenceScopeResourceModel, err error) {
+	switch {
+	case client.IsNotFound(err):
 		diags.AddError(
-			"Evidence Scope Not Stored",
-			"The platform accepted the request but did not store the change. A framework scope is stored only "+
-				"when every framework scoped on the requirement is custom or active in your account.",
+			"Requirement Not Found",
+			fmt.Sprintf("No requirement with ID %s exists in this account.", data.RequirementID.ValueString()),
 		)
-		return
+	case errors.Is(err, client.ErrEvidenceScopeTypeMismatch):
+		diags.AddAttributeError(
+			path.Root("scope_type"),
+			"Scope Type Does Not Match",
+			fmt.Sprintf("Unable to %s: %s.", action, err),
+		)
+	case errors.Is(err, client.ErrEvidenceScopeNotStored):
+		detail := fmt.Sprintf("Unable to %s: %s.", action, err)
+		if data.ScopeType.ValueString() == client.EvidenceScopeFramework {
+			detail += " " + frameworkScopeStoredNote
+		}
+		diags.AddError("Evidence Scope Not Stored", detail)
+	default:
+		addClientError(diags, action, err)
 	}
-	addClientError(diags, action, err)
 }

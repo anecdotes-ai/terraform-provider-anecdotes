@@ -19,7 +19,9 @@ only at apply:
 
 - **Cross-entity references** — IDs such as `framework_id`, `evidence_id`,
   `control_id`, and owner email addresses are checked for existence and permission
-  by the API. A non-existent or unauthorized reference fails at apply.
+  by the API. A non-existent or unauthorized reference fails at apply. The
+  exception is `anecdotes_mapping_requirement_evidence_scope`; see Evidence
+  scopes below.
 - **Uniqueness / duplicates** — name uniqueness (frameworks, categories, and
   similar) is enforced by the API and cannot be detected at plan time. Creating
   an entity whose name already exists fails at apply; bring the existing entity
@@ -67,12 +69,18 @@ framework or control scope of a requirement:
 
 - Creating it for an entry that already exists fails. Import the entry first
   (`terraform import anecdotes_mapping_requirement_evidence_scope.<name>
-  <requirement_id>/<scope_type>/<scope_id>/<evidence_id>`).
+  <requirement_id>/<scope_id>/<evidence_id>`).
 - A framework scope is stored only for a custom framework or a framework that is
-  active in the account. For any other framework the apply fails with "Evidence
+  active in your account. For any other framework the apply fails with "Evidence
   Scope Not Stored".
+- When a framework is deleted or stops being active in your account, the scopes
+  for that framework are removed. The resource drops out of state on the next
+  refresh, and creating it again fails until the framework is active.
 - `evidence_id` and a control `scope_id` are not checked against existing
-  objects. An ID that matches nothing is stored and has no effect.
+  objects. An ID that matches nothing is stored as written.
+- Scope changes made to the same requirement elsewhere while an apply is
+  running, in the Anecdotes application or by another Terraform run, can be
+  overwritten.
 
 ## Requirements provided by the platform cannot be deleted
 

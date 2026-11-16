@@ -7,12 +7,6 @@ description: |-
   This resource creates the relationship between requirements and evidence in the
   Requirements Hub. Once linked, the evidence appears in the requirement's evidence
   section and is used for compliance monitoring.
-  **Note:** The underlying API uses set-based replacement — each link/unlink
-  operation reads the current list, modifies it, and writes back the full list.
-  When multiple evidence links target the same requirement in parallel, a race
-  condition may cause one link to be lost. Running `terraform apply` a second
-  time will converge to the desired state. To avoid this, use `depends_on`
-  to sequence links to the same requirement.
 ---
 
 # anecdotes_mapping_requirement_evidence (Resource)
@@ -22,13 +16,6 @@ Manages a link between an Anecdotes requirement and an evidence item.
 This resource creates the relationship between requirements and evidence in the
 Requirements Hub. Once linked, the evidence appears in the requirement's evidence
 section and is used for compliance monitoring.
-
-> **Note:** The underlying API uses set-based replacement — each link/unlink
-> operation reads the current list, modifies it, and writes back the full list.
-> When multiple evidence links target the same requirement in parallel, a race
-> condition may cause one link to be lost. Running `terraform apply` a second
-> time will converge to the desired state. To avoid this, use `depends_on`
-> to sequence links to the same requirement.
 
 ## Example Usage
 
