@@ -54,7 +54,7 @@ description: |-
  Every request the provider sends carries a User-Agent header identifying the
  provider version, the Terraform CLI version, and the Go runtime/platform, for example:
  
- terraform-provider-anecdotes/1.2.0 (+https://github.com/anecdotes-ai/terraform-provider-anecdotes) Terraform/1.9.0 go1.25.13 darwin/arm64
+ terraform-provider-anecdotes/1.3.0 (+https://github.com/anecdotes-ai/terraform-provider-anecdotes) Terraform/1.9.0 go1.26.11 darwin/arm64
  
  This carries no credential or customer-identifying data — it only helps Anecdotes support
  correlate a report to the exact build that produced it.
@@ -146,7 +146,7 @@ Every request the provider sends carries a `User-Agent` header identifying the
 provider version, the Terraform CLI version, and the Go runtime/platform, for example:
 
 ```
-terraform-provider-anecdotes/1.2.0 (+https://github.com/anecdotes-ai/terraform-provider-anecdotes) Terraform/1.9.0 go1.25.13 darwin/arm64
+terraform-provider-anecdotes/1.3.0 (+https://github.com/anecdotes-ai/terraform-provider-anecdotes) Terraform/1.9.0 go1.26.11 darwin/arm64
 ```
 
 This carries no credential or customer-identifying data — it only helps Anecdotes support
@@ -169,7 +169,7 @@ terraform {
   required_providers {
     anecdotes = {
       source  = "anecdotes-ai/anecdotes"
-      version = "1.2.0"
+      version = "1.3.0"
     }
   }
 }
